@@ -123,7 +123,7 @@ function updateStatusBar(data) {
     statusBarToday.hide();
     statusBarDaily.hide();
     statusBarDays.tooltip = [data.error, data.fetchError || ''].filter(Boolean).join('\n');
-    statusBarDays.command = undefined;
+    statusBarDays.command = 'cursorBudget.quickMenu';
     statusBarDays.show();
     return;
   }
@@ -139,7 +139,7 @@ function updateStatusBar(data) {
 
   for (const item of items) {
     item.tooltip = tooltip;
-    item.command = undefined;
+    item.command = 'cursorBudget.quickMenu';
     item.show();
   }
 }

@@ -269,7 +269,9 @@ function fmtDay(isoOrMs) {
 
   const autoPct = period.planUsage?.autoPercentUsed ?? s.autoPercentUsed;
   const apiLimitUsd = (s.apiLimitCents || 50000) / 100;
-  const cursorLimitUsd = autoPct > 0 ? spend.cursorModels / (autoPct / 100) : 2000;
+  const cursorLimitUsd = s.autoLimitCents > 0
+    ? s.autoLimitCents / 100
+    : (autoPct > 0 ? spend.cursorModels / (autoPct / 100) : 3000);
   const cursorLimitRounded = Math.round(cursorLimitUsd / 100) * 100;
 
   const models = toModels(by, apiLimitUsd, cursorLimitRounded);
@@ -282,8 +284,8 @@ function fmtDay(isoOrMs) {
   const prevEndMs = startMs;
   const { all: prevAll } = await fetchAll(t.sessionToken, prevStartMs, prevEndMs);
   const prevAgg = aggregateEvents(prevAll, autoBucketSet);
-  // 上周期 Cursor Models 池按 Ultra 惯例 $2000（上周期末 Auto%≈32.5% 反推一致）
-  const prevModels = toModels(prevAgg.by, apiLimitUsd, 2000);
+  // 上周期与本周期共用当前反推的 Cursor Models 分母
+  const prevModels = toModels(prevAgg.by, apiLimitUsd, cursorLimitRounded);
   const prevValueBoard = valueBoard(prevModels);
   const prevCycleValue = Object.fromEntries(
     prevValueBoard.map((m) => [
@@ -294,15 +296,16 @@ function fmtDay(isoOrMs) {
   const prevCycleLabel = `${fmtDay(prevStartMs)} – ${fmtDay(prevEndMs)}`;
 
   const prev = [
-    { name: 'grok-4.6', tokens: 234393744, usagePct: 7.55851 },
-    { name: 'grok-4.5', tokens: 213323329, usagePct: 14.71052 },
-    { name: 'opus-5-high', tokens: 28744220, usagePct: 6.69021 },
-    { name: 'fable-5-high', tokens: 11182900, usagePct: 5.64248 },
-    { name: 'opus-5-medium', tokens: 6289116, usagePct: 1.39348 },
-    { name: 'fable-5-xhigh', tokens: 5805964, usagePct: 3.67847 },
-    { name: 'opus-5-max', tokens: 4671099, usagePct: 1.45548 },
+    { name: 'grok-4.6', tokens: 630375157, usagePct: 16.66141 },
+    { name: 'grok-4.5', tokens: 216305648, usagePct: 9.97277 },
+    { name: 'opus-5-high', tokens: 118112083, usagePct: 25.65264 },
+    { name: 'opus-5-medium', tokens: 39298786, usagePct: 7.20334 },
+    { name: 'opus-5-max', tokens: 32299049, usagePct: 7.07962 },
+    { name: 'fable-5-high', tokens: 31854136, usagePct: 14.3311 },
+    { name: 'fable-5-xhigh', tokens: 12560693, usagePct: 6.46496 },
+    { name: 'opus-4.6-high', tokens: 1287308, usagePct: 0.59465 },
     { name: 'opus-4.6-max', tokens: 1190364, usagePct: 0.3658 },
-    { name: 'opus-4.6-high', tokens: 290829, usagePct: 0.17544 },
+    { name: 'gpt-5.6-sol-high', tokens: 237433, usagePct: 0.15998 },
     { name: 'claude-opus-4-8-thinking-high', tokens: 267073, usagePct: 0 },
   ];
   // 上次快照的 User API（不进 MODELS，更新回复仍须单独说明）
@@ -390,7 +393,7 @@ function fmtDay(isoOrMs) {
   const fs = require('fs');
   const canvasPath =
     process.env.MODEL_VALUE_CANVAS ||
-    '/home/ai-group/.cursor/projects/empty-window/canvases/cursor-model-value.canvas.tsx';
+    '/home/ai-group/.cursor/projects/home-ai-group-Nest/canvases/cursor-model-value.canvas.tsx';
   if (fs.existsSync(canvasPath)) {
     let src = fs.readFileSync(canvasPath, 'utf8');
     const cycle = `${fmtDay(s.billingCycleStart)} – ${fmtDay(s.billingCycleEnd)}`;

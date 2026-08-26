@@ -246,8 +246,17 @@ function valueBoard(models) {
     .map((m, i) => ({ ...m, rank: i + 1 }));
 }
 
+function toMs(isoOrMs) {
+  if (typeof isoOrMs === 'number' && Number.isFinite(isoOrMs)) return isoOrMs;
+  const s = String(isoOrMs ?? '');
+  if (/^\d+$/.test(s)) return Number(s);
+  const parsed = Date.parse(s);
+  if (!Number.isNaN(parsed)) return parsed;
+  throw Error('bad date: ' + isoOrMs);
+}
+
 function fmtDay(isoOrMs) {
-  const d = new Date(isoOrMs);
+  const d = new Date(toMs(isoOrMs));
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
@@ -259,8 +268,8 @@ function fmtDay(isoOrMs) {
   if (t.error) throw Error(t.error);
   const u = await fetchUsageData(t.sessionToken, t.userId, t.accessToken);
   const s = u.summary;
-  const startMs = Date.parse(s.billingCycleStart);
-  const endMs = Date.parse(s.billingCycleEnd);
+  const startMs = toMs(s.billingCycleStart);
+  const endMs = toMs(s.billingCycleEnd);
   const period = await post('/api/dashboard/get-current-period-usage', t.sessionToken, {});
   const autoBucketSet = new Set(period.autoBucketModels || []);
   const { all, total } = await fetchAll(t.sessionToken, startMs, endMs);
@@ -284,8 +293,8 @@ function fmtDay(isoOrMs) {
   const prevEndMs = startMs;
   const { all: prevAll } = await fetchAll(t.sessionToken, prevStartMs, prevEndMs);
   const prevAgg = aggregateEvents(prevAll, autoBucketSet);
-  // 上周期与本周期共用当前反推的 Cursor Models 分母
-  const prevModels = toModels(prevAgg.by, apiLimitUsd, cursorLimitRounded);
+  // 上周期 Cursor Models 池按当时 Ultra 惯例 $2000（上周期末 Auto%≈32.5% 反推一致）
+  const prevModels = toModels(prevAgg.by, apiLimitUsd, 2000);
   const prevValueBoard = valueBoard(prevModels);
   const prevCycleValue = Object.fromEntries(
     prevValueBoard.map((m) => [
@@ -296,9 +305,9 @@ function fmtDay(isoOrMs) {
   const prevCycleLabel = `${fmtDay(prevStartMs)} – ${fmtDay(prevEndMs)}`;
 
   const prev = [
-    { name: 'grok-4.6', tokens: 630375157, usagePct: 16.66141 },
-    { name: 'grok-4.5', tokens: 216305648, usagePct: 9.97277 },
-    { name: 'opus-5-high', tokens: 118112083, usagePct: 25.65264 },
+    { name: 'grok-4.6', tokens: 660025473, usagePct: 17.99639 },
+    { name: 'grok-4.5', tokens: 217608607, usagePct: 10.06315 },
+    { name: 'opus-5-high', tokens: 118514478, usagePct: 25.94954 },
     { name: 'opus-5-medium', tokens: 39298786, usagePct: 7.20334 },
     { name: 'opus-5-max', tokens: 32299049, usagePct: 7.07962 },
     { name: 'fable-5-high', tokens: 31854136, usagePct: 14.3311 },

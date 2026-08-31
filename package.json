@@ -2,7 +2,7 @@
   "name": "cursorbudget",
   "displayName": "CursorBudget",
   "description": "本机日账：追踪 Cursor API 用量、工作日剩余与今日消耗。登录态与用量只留在本机。",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "publisher": "local",
   "engines": {
     "vscode": "^1.85.0"

@@ -10,9 +10,9 @@ from typing import Dict, Tuple
 CONFIG_DIR = Path.home() / ".config" / "cursorbudget"
 CONFIG_PATH = CONFIG_DIR / "config.json"
 
-# Logical design size — a vertical day-ledger, not a monitor tile.
-BASE_W = 312
-BASE_H = 392
+# Logical design size — Ink Ledger daybook proportions.
+BASE_W = 336
+BASE_H = 568
 
 DISPLAY_MODES = ("window", "panel")
 DISPLAY_MODE_LABELS = {
@@ -37,13 +37,13 @@ ThemeColors = Tuple[Tuple[float, float, float], ...]
 
 THEMES: Dict[str, ThemeColors] = {
     "light": (
-        (0.965, 0.945, 0.910),  # 宣纸
-        (0.145, 0.125, 0.110),  # 松烟
-        (0.42, 0.36, 0.30),
+        (0.968, 0.948, 0.915),  # 宣纸
+        (0.125, 0.108, 0.095),  # 松烟
+        (0.40, 0.34, 0.28),
         (0.82, 0.76, 0.68),
-        (0.62, 0.42, 0.16),     # 赭
+        (0.55, 0.38, 0.16),     # 赭
         (0.72, 0.22, 0.18),     # 朱砂
-        (0.28, 0.42, 0.32),     # 青苔
+        (0.28, 0.40, 0.33),     # 青苔
     ),
     "dark": (
         (0.100, 0.086, 0.074),  # 砚
@@ -104,7 +104,7 @@ class Settings:
 
     def window_size(self) -> Tuple[int, int]:
         s = self.pixel_scale
-        return max(220, int(round(BASE_W * s))), max(260, int(round(BASE_H * s)))
+        return max(240, int(round(BASE_W * s))), max(360, int(round(BASE_H * s)))
 
     @property
     def refresh_ms(self) -> int:

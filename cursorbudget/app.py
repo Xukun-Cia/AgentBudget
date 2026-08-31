@@ -77,18 +77,18 @@ def _fmt_when(value: Optional[str]) -> str:
         return str(value)[:16]
 
 
-# Resolved once at import: CJK-capable face for ledger labels.
+# Ink Ledger: one serif family only (CJK-capable).
 try:
     import subprocess as _subprocess
 
     _matched = _subprocess.check_output(
-        ["fc-match", "-f", "%{family}", "Noto Sans CJK SC:lang=zh-cn"],
+        ["fc-match", "-f", "%{family}", "Noto Serif CJK SC:lang=zh-cn"],
         text=True,
         timeout=2,
     ).strip()
-    _UI_FONT = _matched.split(",")[0].strip() or "Noto Sans CJK SC"
+    _UI_FONT = _matched.split(",")[0].strip() or "Noto Serif CJK SC"
 except Exception:
-    _UI_FONT = "Noto Sans CJK SC"
+    _UI_FONT = "Noto Serif CJK SC"
 
 
 def _set_font(cr: cairo.Context, *, bold: bool = False, size: float = 11) -> None:
@@ -360,214 +360,206 @@ class LedgerWindow(Gtk.Window):
         return False
 
     def _paint_logical(self, cr: cairo.Context) -> None:
+        """Ink Ledger card: peer pools, clear air under rules, one serif family."""
         snap = self.app.snap
         w, h = BASE_W, BASE_H
         paper, ink, ink_soft, rule, ochre, cinnabar, moss = self.app.settings.colors()
         tone = self.app.tone()
-        accent = cinnabar if tone == "critical" else ochre if tone == "warn" else moss
+        api_accent = cinnabar if tone == "critical" else ochre if tone == "warn" else moss
+
+        pad_l = 24
+        pad_r = w - 22
+        content_w = pad_r - pad_l
 
         _rgba(cr, paper)
         cr.rectangle(0, 0, w, h)
         cr.fill()
 
-        # binding spine — a ledger, not a monitor bezel
         _rgba(cr, ochre)
-        cr.rectangle(0, 0, 7, h)
-        cr.fill()
-        _rgba(cr, ink, 0.18)
-        cr.rectangle(7, 0, 1, h)
+        cr.rectangle(0, 0, 8, h)
         cr.fill()
 
-        # paper edge
-        _rgba(cr, ink, 0.22)
+        _rgba(cr, ink, 0.12)
         cr.set_line_width(1.0)
         cr.rectangle(8.5, 0.5, w - 9, h - 1)
         cr.stroke()
 
-        paint_mark(cr, 28, 22, 11, tone=tone)
-
+        paint_mark(cr, pad_l + 10, 24, 10, tone=tone)
         _set_font(cr, bold=False, size=12)
         _rgba(cr, ochre)
-        cr.move_to(42, 26)
+        cr.move_to(pad_l + 28, 28)
         cr.show_text("CursorBudget")
-
-        _set_font(cr, bold=False, size=13)
-        _rgba(cr, ink_soft)
-        cr.move_to(w - 22, 24)
+        _set_font(cr, bold=False, size=14)
+        _rgba(cr, ink_soft, 0.55)
+        tw = cr.text_extents("×").width
+        cr.move_to(pad_r - tw, 27)
         cr.show_text("×")
 
-        self._rule(cr, 18, 38, w - 16, rule)
+        y = 42
+        self._rule(cr, pad_l, y, pad_r, rule)
 
         if snap is None:
-            _set_font(cr, bold=False, size=12)
+            _set_font(cr, bold=False, size=13)
             _rgba(cr, ink_soft)
-            cr.move_to(22, 80)
+            cr.move_to(pad_l, 88)
             cr.show_text("正在翻开今日账本…")
             return
 
         if not snap.ok:
-            _set_font(cr, bold=False, size=12)
-            _rgba(cr, cinnabar)
-            self._wrapped_text(cr, snap.error or "无法读取用量", 22, 72, w - 40, ink=cinnabar)
+            _set_font(cr, bold=False, size=13)
+            self._wrapped_text(cr, snap.error or "无法读取用量", pad_l, 80, content_w, ink=cinnabar)
             if snap.fetch_error:
-                _rgba(cr, ink_soft)
-                self._wrapped_text(cr, snap.fetch_error, 22, 120, w - 40, ink=ink_soft)
+                self._wrapped_text(cr, snap.fetch_error, pad_l, 128, content_w, ink=ink_soft)
             return
 
-        y = 52
-        y = self._hero(
-            cr, 22, y, w - 38,
-            "剩余工作日", _fmt_days(snap.remaining_days),
-            f"重置 {_fmt_when(snap.cycle_end)}",
-            ink, ink_soft, ochre,
-        )
-        self._rule(cr, 18, y, w - 16, rule)
-        y += 14
+        # Hero — remaining workdays
+        y = 68
+        _set_font(cr, bold=False, size=11)
+        _rgba(cr, ink_soft)
+        cr.move_to(pad_l, y)
+        cr.show_text("剩余工作日")
+        _set_font(cr, bold=True, size=44)
+        _rgba(cr, ink)
+        cr.move_to(pad_l, y + 48)
+        cr.show_text(_fmt_days(snap.remaining_days))
+        _set_font(cr, bold=False, size=12)
+        _rgba(cr, ochre)
+        cr.move_to(pad_l, y + 72)
+        cr.show_text(f"重置  {_fmt_when(snap.cycle_end)}")
+        y = y + 90
 
-        api_sub = f"{_fmt_usd(snap.api_used_cents)} / {_fmt_usd(snap.api_limit_cents)}"
-        y = self._meter_block(
-            cr, 22, y, w - 38,
+        # Peer pool: API
+        api_sub = f"{_fmt_usd(snap.api_used_cents)}  /  {_fmt_usd(snap.api_limit_cents)}"
+        y = self._pool_section(
+            cr, pad_l, pad_r, y, content_w,
             "API 池", _fmt_pct(snap.api_percent), api_sub,
-            snap.api_percent, accent, ink, ink_soft, rule,
+            snap.api_percent, api_accent, ink, ink_soft, rule,
         )
-        self._rule(cr, 18, y, w - 16, rule)
-        y += 14
 
+        # Peer pool: Cursor Models
+        cursor_sub = f"{_fmt_usd(snap.auto_used_cents)}  /  {_fmt_usd(snap.auto_limit_cents)}"
+        y = self._pool_section(
+            cr, pad_l, pad_r, y, content_w,
+            "Cursor 池", _fmt_pct(snap.auto_percent), cursor_sub,
+            snap.auto_percent, ochre, ink, ink_soft, rule,
+        )
+
+        # Today — quieter, no meter
+        self._rule(cr, pad_l, y, pad_r, rule)
+        base = y + 30
         today_sub = _fmt_usd(snap.today_cents)
         if snap.today_events is not None:
-            today_sub = f"{today_sub} · {snap.today_events} 笔"
+            today_sub = f"{today_sub}  ·  {snap.today_events} 笔"
         if snap.today_truncated:
-            today_sub += " · 未拉全"
-        y = self._pair_block(
-            cr, 22, y, w - 38,
-            "今日 API", _fmt_pct(snap.today_percent), today_sub,
-            "9:00 → 9:00",
-            ink, ink_soft, ochre,
-        )
-        self._rule(cr, 18, y, w - 16, rule)
-        y += 16
+            today_sub += "  ·  未拉全"
+        _set_font(cr, bold=False, size=11)
+        _rgba(cr, ink_soft)
+        cr.move_to(pad_l, base)
+        cr.show_text("今日 API")
+        _set_font(cr, bold=True, size=22)
+        _rgba(cr, ink)
+        pct = _fmt_pct(snap.today_percent)
+        tw = cr.text_extents(pct).width
+        cr.move_to(pad_r - tw, base)
+        cr.show_text(pct)
+        _set_font(cr, bold=False, size=12)
+        _rgba(cr, ink_soft)
+        cr.move_to(pad_l, base + 24)
+        cr.show_text(today_sub)
+        hint = "9:00 → 9:00"
+        hw = cr.text_extents(hint).width
+        cr.move_to(pad_r - hw, base + 24)
+        cr.show_text(hint)
+        y = base + 24 + 28
 
+        # Judgment footer
+        self._rule(cr, pad_l, y, pad_r, rule)
+        base = y + 32
         daily_label = "剩余额度" if snap.is_last_stretch else "日估"
         daily_value = _fmt_pct(snap.daily_budget)
         if not snap.is_last_stretch and snap.daily_budget is not None:
             daily_value = f"{snap.daily_budget:.2f}%/d"
-
-        _set_font(cr, bold=False, size=10)
+        _set_font(cr, bold=False, size=13)
         _rgba(cr, ink_soft)
-        cr.move_to(22, y)
+        cr.move_to(pad_l, base)
         cr.show_text(daily_label)
-        _set_font(cr, bold=True, size=13)
+        _set_font(cr, bold=True, size=16)
         _rgba(cr, ink)
         tw = cr.text_extents(daily_value).width
-        cr.move_to(w - 16 - tw, y)
+        cr.move_to(pad_r - tw, base)
         cr.show_text(daily_value)
-        y += 18
 
-        auto_line = f"Auto {_fmt_pct(snap.auto_percent)}"
-        if snap.auto_limit_cents is not None:
-            auto_line = (
-                f"Auto {_fmt_usd(snap.auto_used_cents)} / {_fmt_usd(snap.auto_limit_cents)}"
-            )
-        plan_line = snap.membership_type
-        if snap.included_limit_cents is not None:
-            bonus = f" · bonus {_fmt_usd(snap.bonus_cents)}" if snap.bonus_cents else ""
-            plan_line = (
-                f"{snap.membership_type}  "
-                f"{_fmt_usd(snap.included_used_cents)} / {_fmt_usd(snap.included_limit_cents)}"
-                f"{bonus}"
-            )
-
-        _set_font(cr, bold=False, size=10)
+        _set_font(cr, bold=False, size=12)
         _rgba(cr, ink_soft)
-        cr.move_to(22, y)
-        cr.show_text(auto_line)
-        y += 14
-        cr.move_to(22, y)
-        cr.show_text(plan_line)
-        y += 14
-        cr.move_to(22, y)
-        cr.show_text(f"周期  {_fmt_when(snap.cycle_start)} → {_fmt_when(snap.cycle_end)}")
-        y += 16
+        plan = snap.membership_type or "—"
+        if snap.included_limit_cents is not None:
+            plan = (
+                f"套餐  {snap.membership_type}  "
+                f"{_fmt_usd(snap.included_used_cents)} / {_fmt_usd(snap.included_limit_cents)}"
+            )
+        else:
+            plan = f"套餐  {snap.membership_type}"
+        cr.move_to(pad_l, base + 26)
+        cr.show_text(plan)
+        if snap.bonus_cents:
+            bonus = f"bonus {_fmt_usd(snap.bonus_cents)}"
+            bw = cr.text_extents(bonus).width
+            cr.move_to(pad_r - bw, base + 26)
+            cr.show_text(bonus)
+
+        cr.move_to(pad_l, base + 50)
+        cr.show_text(f"周期  {_fmt_when(snap.cycle_start)}  →  {_fmt_when(snap.cycle_end)}")
 
         clock = _clock_now()
         footer = snap.workday_label or clock
         if snap.workday_label and "（" in snap.workday_label:
             footer = clock + snap.workday_label[snap.workday_label.find("（"):]
         if self.app.fetching:
-            footer = f"{footer}  · 刷新中"
-        _set_font(cr, bold=False, size=9)
-        _rgba(cr, ink_soft, 0.9)
-        cr.move_to(22, min(h - 14, y + 4))
+            footer = f"{footer}  ·  刷新中"
+        # Keep a full line step below 周期; never clamp into that row.
+        cr.move_to(pad_l, base + 74)
         cr.show_text(footer)
 
     def _rule(self, cr: cairo.Context, x: float, y: float, right: float, rule) -> None:
         _rgba(cr, rule)
-        cr.set_line_width(0.8)
+        cr.set_line_width(0.9)
         cr.move_to(x, y)
         cr.line_to(right, y)
         cr.stroke()
 
-    def _hero(self, cr, x, y, width, label, value, sub, ink, ink_soft, ochre) -> float:
-        _set_font(cr, bold=False, size=10)
+    def _pool_section(
+        self, cr, pad_l, pad_r, y_rule, content_w,
+        label, value, dollars, pct, accent, ink, ink_soft, rule,
+    ) -> float:
+        """Hairline at y_rule, then label/% with clearance, dollars, meter. Returns next y."""
+        self._rule(cr, pad_l, y_rule, pad_r, rule)
+        # Clearance below rule must exceed display-figure ascent (~20px for 22pt).
+        base = y_rule + 32
+        _set_font(cr, bold=False, size=11)
         _rgba(cr, ink_soft)
-        cr.move_to(x, y)
-        cr.show_text(label)
-        _set_font(cr, bold=True, size=36)
-        _rgba(cr, ink)
-        cr.move_to(x, y + 40)
-        cr.show_text(value)
-        _set_font(cr, bold=False, size=10)
-        _rgba(cr, ochre)
-        cr.move_to(x, y + 58)
-        cr.show_text(sub)
-        return y + 70
-
-    def _meter_block(self, cr, x, y, width, label, value, sub, pct, accent, ink, ink_soft, rule) -> float:
-        _set_font(cr, bold=False, size=10)
-        _rgba(cr, ink_soft)
-        cr.move_to(x, y)
+        cr.move_to(pad_l, base)
         cr.show_text(label)
         _set_font(cr, bold=True, size=22)
         _rgba(cr, ink)
         tw = cr.text_extents(value).width
-        cr.move_to(x + width - tw, y + 4)
+        cr.move_to(pad_r - tw, base)
         cr.show_text(value)
-        _set_font(cr, bold=False, size=10)
+        _set_font(cr, bold=False, size=12)
         _rgba(cr, ink_soft)
-        cr.move_to(x, y + 18)
-        cr.show_text(sub)
-        bx, by, bw, bh = x, y + 26, width, 7
+        cr.move_to(pad_l, base + 24)
+        cr.show_text(dollars)
+        by = base + 38
         _rgba(cr, rule)
-        cr.rectangle(bx, by, bw, bh)
+        cr.rectangle(pad_l, by, content_w, 7)
         cr.fill()
-        fill = 0.0 if pct is None else max(0.0, min(1.0, pct / 100.0)) * bw
+        fill = 0.0 if pct is None else max(0.0, min(1.0, pct / 100.0)) * content_w
         _rgba(cr, accent)
-        cr.rectangle(bx, by, fill, bh)
+        cr.rectangle(pad_l, by, fill, 7)
         cr.fill()
-        return y + 46
-
-    def _pair_block(self, cr, x, y, width, label, value, sub, hint, ink, ink_soft, ochre) -> float:
-        _set_font(cr, bold=False, size=10)
-        _rgba(cr, ink_soft)
-        cr.move_to(x, y)
-        cr.show_text(label)
-        _set_font(cr, bold=True, size=22)
-        _rgba(cr, ink)
-        tw = cr.text_extents(value).width
-        cr.move_to(x + width - tw, y + 4)
-        cr.show_text(value)
-        _set_font(cr, bold=False, size=10)
-        _rgba(cr, ochre)
-        cr.move_to(x, y + 20)
-        cr.show_text(sub)
-        _rgba(cr, ink_soft)
-        hw = cr.text_extents(hint).width
-        cr.move_to(x + width - hw, y + 20)
-        cr.show_text(hint)
-        return y + 34
+        return by + 7 + 20
 
     def _wrapped_text(self, cr, text: str, x: float, y: float, max_w: float, ink) -> None:
-        _set_font(cr, bold=False, size=11)
+        _set_font(cr, bold=False, size=12)
         _rgba(cr, ink)
         line = ""
         cy = y
@@ -577,7 +569,7 @@ class LedgerWindow(Gtk.Window):
                 cr.move_to(x, cy)
                 cr.show_text(line)
                 line = ch
-                cy += 16
+                cy += 18
             else:
                 line = trial
         if line:

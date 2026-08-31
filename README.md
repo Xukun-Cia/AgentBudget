@@ -56,12 +56,12 @@ CursorBudget **没有云端账号，也不上传任何东西**。
 需要 Ubuntu 22.04+（GTK 3）、已登录过 Cursor、系统有 `nodejs`。顶栏模式需要 GNOME AppIndicator（Ubuntu 默认开启）。
 
 ```bash
-curl -LO https://github.com/Xukun-Cia/CursorBudget/releases/download/v1.0.1/cursorbudget_1.0.1_all.deb
-sudo apt install ./cursorbudget_1.0.1_all.deb
+curl -LO https://github.com/Xukun-Cia/CursorBudget/releases/download/v1.0.2/cursorbudget_1.0.2_all.deb
+sudo apt install ./cursorbudget_1.0.2_all.deb
 cursorbudget
 ```
 
-桌面取数脚本兼容 Ubuntu 自带的 Node.js 12+（`apt install nodejs`）。
+桌面取数脚本兼容 Ubuntu 自带的 Node.js 12+（`apt install nodejs`）。悬浮卡视觉遵循 **Ink Ledger**（`design/INK-LEDGER.md`）：单一衬线、对等双池、规则线下方留白。
 
 或从源码：
 

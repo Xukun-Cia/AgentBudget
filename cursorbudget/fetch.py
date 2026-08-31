@@ -60,21 +60,47 @@ def lib_dir() -> Path:
 
 
 def _iter_node() -> Iterator[str]:
-    for name in ("node", "nodejs"):
-        found = shutil.which(name)
-        if found:
-            yield found
+    # Prefer nvm first: Ubuntu's apt nodejs may be too old for desktop launch PATH.
     nvm = Path.home() / ".nvm" / "versions" / "node"
     if nvm.is_dir():
         for version in sorted(nvm.iterdir(), reverse=True):
             candidate = version / "bin" / "node"
             if candidate.is_file():
                 yield str(candidate)
+    for name in ("node", "nodejs"):
+        found = shutil.which(name)
+        if found:
+            yield found
+    for fallback in ("/usr/bin/nodejs", "/usr/bin/node"):
+        if Path(fallback).is_file():
+            yield fallback
+
+
+def _node_major(path: str) -> Optional[int]:
+    try:
+        out = subprocess.check_output(
+            [path, "-p", "process.versions.node.split('.')[0]"],
+            text=True,
+            timeout=5,
+        ).strip()
+        return int(out)
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
 
 
 def resolve_node() -> str:
+    seen = set()
+    candidates = []
     for path in _iter_node():
-        return path
+        if path in seen:
+            continue
+        seen.add(path)
+        candidates.append(path)
+        major = _node_major(path)
+        if major is not None and major >= 12:
+            return path
+    if candidates:
+        return candidates[0]
     raise RuntimeError("需要 Node.js 才能读取用量（apt 安装 nodejs，或保证 node 在 PATH 中）")
 
 

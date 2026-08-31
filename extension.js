@@ -95,7 +95,7 @@ function buildQuickPickItems() {
     },
     {
       label: '$(sync) 立即刷新',
-      description: cachedData?.usageSource || '',
+      description: (cachedData && cachedData.usageSource) || '',
       id: 'refresh',
     },
   ];

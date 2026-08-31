@@ -2,7 +2,8 @@
 """
 CursorBudget — 旧终端脚本（口径已过时，仅供对照）。
 
-请使用桌面应用 `cursorbudget` 或编辑器扩展。本脚本仍走旧 /api/usage，
+主入口是 Ubuntu 桌面应用：`cursorbudget` 或仓库 Release 里的 .deb。
+可选编辑器配套见 README「可选：编辑器配套」。本脚本仍走旧 /api/usage，
 日估按整日工作日计数，与当前 Dashboard 百分比条不一致。
 
 用法:

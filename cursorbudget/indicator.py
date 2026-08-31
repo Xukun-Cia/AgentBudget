@@ -147,14 +147,15 @@ ID_SETTINGS = 7
 ID_ABOUT = 8
 ID_SEP3 = 9
 ID_QUIT = 10
-LABEL_GUIDE = "◔99.99  ▮100.00%  ◑100.00%"
+# Stable width guide for Ayatana label: API% ※ today%.
+LABEL_GUIDE = "100.00% ※ 100.00%"
 
 
-def panel_label(days, api, today) -> str:
-    day_txt = f"{days:.2f}" if isinstance(days, (int, float)) else "—"
+def panel_label(api, today) -> str:
+    """Top bar text: cumulative API% ※ today API% (no decorative icons)."""
     api_txt = f"{api:.2f}%" if isinstance(api, (int, float)) else "—"
     today_txt = f"{today:.2f}%" if isinstance(today, (int, float)) else "—"
-    return f"◔{day_txt}  ▮{api_txt}  ◑{today_txt}"
+    return f"{api_txt} ※ {today_txt}"
 
 
 def _icon_theme_path() -> str:
@@ -166,6 +167,7 @@ def _icon_theme_path() -> str:
 
 
 def _icon_pixmap(size: int = 22, tone: str = "ok") -> tuple[int, int, bytes]:
+    """Square app logo for the panel (daybook mark)."""
     surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, size, size)
     cr = cairo.Context(surface)
     paint_app_icon(cr, float(size), tone=tone)
@@ -207,7 +209,7 @@ class PanelIndicator:
         self._watch_ids: list[int] = []
         self._registered = False
         self._status = "Passive"
-        self._label = panel_label(None, None, None)
+        self._label = panel_label(None, None)
         self._tone = "ok"
         self._revision = 1
         self._icon_theme = _icon_theme_path()
@@ -250,8 +252,8 @@ class PanelIndicator:
         self._emit_sni("NewStatus", GLib.Variant("(s)", (self._status,)))
         self._emit_props({"Status": GLib.Variant("s", self._status)})
 
-    def set_figures(self, days, api, today, tone: str = "ok") -> None:
-        label = panel_label(days, api, today)
+    def set_figures(self, api, today, tone: str = "ok") -> None:
+        label = panel_label(api, today)
         tone_changed = tone != self._tone
         if label == self._label and not tone_changed:
             return

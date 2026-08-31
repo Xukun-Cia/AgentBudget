@@ -1,69 +1,40 @@
 # CursorBudget
 
-本机日账：按**中国法定工作日**（9:00–20:00 连续折算）看 Cursor API 还剩多少、今天花了多少。
+本机 **Cursor API 日账**小工具：按中国法定工作日（每天 9:00–20:00 连续折算）看本周期还剩多少、今天花了多少。
 
-有两副面孔，互不依赖：
+> **主产品是 Ubuntu 桌面应用**（`.deb`）：悬浮卡或钉在 GNOME 顶栏，不必打开 Cursor 窗口。  
+> 同仓库另有可选的 **Cursor 编辑器配套**，方便在状态栏扫一眼；两者共用取数逻辑，互不依赖。
 
-1. **Ubuntu 桌面应用**（`.deb`）— 悬浮卡或钉在 GNOME 顶栏，不需要打开 Cursor 窗口
-2. **Cursor / VS Code 状态栏扩展** — 仍可装在编辑器里
+登录态和用量**只留在这台电脑**。公开仓库是纯工具代码，不含账号、token、邮箱或个人消费明细。
 
-登录态和用量**只留在这台电脑**。这个公开仓库是纯小工具，不含账号、token、邮箱或你的消费明细。
+---
 
-## 设计
+## 桌面应用（推荐）
 
-不是系统监视器。卡片是一本竖着翻的日账：宣纸 / 砚台两色，左侧赭石书脊，用量用朱砂提醒。顶栏只留三个没有名称的数字。
+### 两种显示模式
 
-| 表面 | 显示 |
+| 模式 | 做什么 |
 |---|---|
-| **顶栏** | `◔10.52  ▮44.99%  ◑2.81%` — 剩余工作日、本周期 API 用量、今日 API 用量。只有小图标和数字，没有中英名称 |
-| **悬浮卡** | 完整日账：日估、Auto 池、套餐 included/bonus、计费周期、工作日时钟 |
+| **悬浮卡** | Ink Ledger 日账：剩余工作日、**API 池**、**Cursor 池**、今日 API、日估、套餐与周期 |
+| **顶栏** | 应用图标 + 两个数字：`API累计% ※ 今日API%`（例如 `67.09% ※ 3.93%`） |
 
-右键（或点顶栏图标）可在「悬浮卡 / 顶栏」之间切换。
+右键卡片或点顶栏条目，可在「悬浮卡 / 顶栏」之间切换。
 
-### 用量口径
+视觉说明见 [`design/INK-LEDGER.md`](design/INK-LEDGER.md)。
 
-与 Dashboard 百分比条对齐。分母优先用官方 `totalSpend` + 三个百分比反推，硬编码仅作回退：
+### 安装
 
-| 池 | 百分比分母（当前 Ultra 回退） | 说明 |
-|---|---|---|
-| Other Models（API） | **$500** | 第三方模型（Claude / GPT / Gemini 等） |
-| Cursor Models（Auto） | **$3000** | Auto / Composer / Grok / Vega |
-| 合计 | **$3500** | 对应 `totalPercentUsed` |
-
-`plan.limit`（Ultra 约 **$400**）是套餐 included 购买额度，和上面百分比条的分母不是同一口径。
-
-今日窗口：当天 9:00 → 次日 9:00。日估 = 剩余 API% ÷ 剩余折算工作日；最后不足 1 个工作日时按剩余全额计，且日估 + 已用 ≤ 100%。
-
-## 隐私红线
-
-CursorBudget **没有云端账号，也不上传任何东西**。
-
-| 数据 | 在哪 | 会不会进 GitHub |
-|---|---|---|
-| Cursor 登录 JWT | 本机 `~/.config/Cursor/User/globalStorage/state.vscdb`（Cursor 自己写的） | 否 |
-| 用量请求 | 本机进程直连 `cursor.com`（和打开官网 Dashboard 一样） | 否 |
-| 桌面设置 | 本机 `~/.config/cursorbudget/config.json`（主题、刷新间隔，无账号） | 否 |
-| 调试落盘 | 仅当设置了 `CURSORBUDGET_DEBUG=1`，写到 `~/.config/cursorbudget/debug/` | 否（已 gitignore） |
-
-公开仓库里**不应出现**：token、userId、邮箱、`probe-results.json`、`api-response.json`、把个人 token 数 / 用量% 写死在源码里。
-
-桌面端通过 `lib/status-json.js` 取数，stdout **只有汇总数字**，不含 token / userId / 原始事件。
-
-软依赖：长期不打开 Cursor，本地 JWT 可能过期，需要再登录一次让 Cursor 写回 token。这是登录态新鲜度，不是必须挂着编辑器窗口。
-
-## 安装桌面版
-
-需要 Ubuntu 22.04+（GTK 3）、已登录过 Cursor、系统有 `nodejs`。顶栏模式需要 GNOME AppIndicator（Ubuntu 默认开启）。
+需要 Ubuntu 22.04+（GTK 3）、本机已登录过 Cursor、系统有 `nodejs`。顶栏模式需要 GNOME AppIndicator（Ubuntu 默认开启）。
 
 ```bash
-curl -LO https://github.com/Xukun-Cia/CursorBudget/releases/download/v1.0.2/cursorbudget_1.0.2_all.deb
-sudo apt install ./cursorbudget_1.0.2_all.deb
+curl -LO https://github.com/Xukun-Cia/CursorBudget/releases/download/v1.0.3/cursorbudget_1.0.3_all.deb
+sudo apt install ./cursorbudget_1.0.3_all.deb
 cursorbudget
 ```
 
-桌面取数脚本兼容 Ubuntu 自带的 Node.js 12+（`apt install nodejs`）。悬浮卡视觉遵循 **Ink Ledger**（`design/INK-LEDGER.md`）：单一衬线、对等双池、规则线下方留白。
+取数脚本兼容 Ubuntu 自带的 Node.js 12+（`apt install nodejs`）。
 
-或从源码：
+从源码跑：
 
 ```bash
 sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-3.0 python3-cairo nodejs
@@ -72,16 +43,54 @@ cd CursorBudget
 PYTHONPATH=. python3 -m cursorbudget
 ```
 
-打包：
+打包 `.deb`：
 
 ```bash
 ./scripts/build-deb.sh
-# dist/cursorbudget_1.0.0_all.deb
+# → dist/cursorbudget_<version>_all.deb
 ```
 
-配置在 `~/.config/cursorbudget/config.json`。默认 60 秒刷新。
+本地配置：`~/.config/cursorbudget/config.json`（主题、刷新间隔、显示模式等，无账号字段）。默认约 60 秒刷新。
 
-## 安装编辑器扩展
+### 用量口径
+
+与 Cursor Dashboard 百分比条对齐。分母优先用官方 `totalSpend` + 三个百分比反推，硬编码仅作回退：
+
+| 池 | 百分比分母（当前 Ultra 回退） | 说明 |
+|---|---|---|
+| Other Models（API） | **$500** | 第三方模型（Claude / GPT / Gemini 等） |
+| Cursor Models（Auto） | **$3000** | Auto / Composer / Grok / Vega 等 |
+| 合计 | **$3500** | 对应 `totalPercentUsed` |
+
+`plan.limit`（Ultra 约 **$400**）是套餐 included 购买额度，和上面百分比条的分母不是同一口径。
+
+- **今日窗口**：当天 9:00 → 次日 9:00  
+- **日估**：剩余 API% ÷ 剩余折算工作日；最后不足 1 个工作日时按剩余全额计，且日估 + 已用 ≤ 100%
+
+---
+
+## 隐私红线
+
+CursorBudget **没有云端账号，也不上传任何东西**。
+
+| 数据 | 在哪 | 会不会进 GitHub |
+|---|---|---|
+| Cursor 登录 JWT | 本机 `~/.config/Cursor/User/globalStorage/state.vscdb`（Cursor 写入） | 否 |
+| 用量请求 | 本机进程直连 `cursor.com`（与打开官网 Dashboard 相同） | 否 |
+| 桌面设置 | 本机 `~/.config/cursorbudget/config.json` | 否 |
+| 调试落盘 | 仅当 `CURSORBUDGET_DEBUG=1` 时写入 `~/.config/cursorbudget/debug/` | 否（已 gitignore） |
+
+桌面端通过 `lib/status-json.js` 取数，stdout **只有汇总数字**，不含 token / userId / 原始事件。
+
+软依赖：长期不打开 Cursor，本地 JWT 可能过期，再登录一次即可。这是登录态新鲜度，不是必须挂着编辑器窗口。
+
+公开仓库里**不应出现**：token、userId、邮箱、`probe-results.json`、`api-response.json`，或把个人用量写死在源码里。
+
+---
+
+## 可选：编辑器配套
+
+若希望在 Cursor / VS Code 状态栏也看到同样摘要，可额外安装配套扩展（**不是**使用本工具的前提）：
 
 ```bash
 git clone https://github.com/Xukun-Cia/CursorBudget.git
@@ -89,37 +98,46 @@ cd CursorBudget
 bash install.sh
 ```
 
-然后在 Cursor 里执行 **Developer: Reload Window**。`install.sh` 同步到 `~/.cursor/extensions/local.cursorbudget-<version>/`。
+然后在编辑器里执行 **Developer: Reload Window**。  
+`install.sh` 同步到 `~/.cursor/extensions/local.cursorbudget-<version>/`。
 
-设置里搜索 `cursorBudget`：刷新间隔、是否显示状态栏、警告 / 严重阈值。
+状态栏四项：日历（剩余日）· 波形（API%）· 历史（今日）· 图表（日估）。  
+设置里搜索 `cursorBudget`；命令面板有「立即刷新 / 打开用量页 / 快捷菜单」。
 
-命令：`CursorBudget: Refresh` / `Menu` / `Open Dashboard`。
+---
 
 ## 要求
 
-- 桌面版：Python 3.8+、PyGObject、GTK 3、Node.js、本机已有 Cursor 登录态
-- 扩展：Cursor 或 VS Code ≥ 1.85，系统有 `python3`（读本地 SQLite）
+| 场景 | 依赖 |
+|---|---|
+| **桌面应用** | Python 3.8+、PyGObject、GTK 3、Node.js、本机 Cursor 登录态 |
+| 编辑器配套（可选） | Cursor 或 VS Code ≥ 1.85；系统有 `python3`（读本地 SQLite） |
+
+---
 
 ## 目录
 
 ```
 CursorBudget/
-├── cursorbudget/         # Ubuntu 桌面应用（日账卡片 + 顶栏）
+├── cursorbudget/          # Ubuntu 桌面应用（悬浮卡 + 顶栏）
 ├── bin/cursorbudget
 ├── data/cursorbudget.desktop
-├── extension.js          # 编辑器扩展
-├── package.json
-├── install.sh
-├── lib/
-│   ├── compute.js        # 共享：取数 + 日估
-│   ├── status-json.js    # 桌面端 CLI，只输出脱敏快照
-│   ├── cursorApi.js      # 读本地 token，请求 Dashboard
+├── design/                # Ink Ledger 视觉说明与预览
+├── lib/                   # 桌面与扩展共用的取数 / 日估
+│   ├── compute.js
+│   ├── status-json.js     # 桌面 CLI，脱敏快照
+│   ├── cursorApi.js
 │   ├── usageDetails.js
 │   ├── workdays.js
 │   └── holidays.json
-├── scripts/build-deb.sh
-└── budget.py             # 旧终端脚本，口径已过时
+├── extension.js           # 可选编辑器配套
+├── package.json           # 配套扩展清单（非桌面安装入口）
+├── install.sh             # 仅同步编辑器配套
+├── scripts/build-deb.sh   # 打桌面 .deb
+└── budget.py              # 旧终端脚本，口径过时，勿作主入口
 ```
+
+---
 
 ## 免责声明
 

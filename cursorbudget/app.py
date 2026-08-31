@@ -191,7 +191,7 @@ class SettingsDialog(Gtk.Dialog):
         grid.attach(self.crit_spin, 1, 5, 1, 1)
 
         hint = Gtk.Label(
-            label="顶栏只显示时长与两个用量百分比。完整日账在悬浮卡。",
+            label="顶栏：应用图标 + API累计% ※ 今日API%。完整日账在悬浮卡。",
             xalign=0,
         )
         hint.set_line_wrap(True)
@@ -714,7 +714,7 @@ class LedgerApp:
         dialog.format_secondary_text(
             "本机日账。登录态与用量只留在这台电脑上，不经过第三方服务器。\n"
             "悬浮卡：左键拖动，右键切换顶栏。\n"
-            "顶栏三项为时长、API 用量、今日用量，只用小图标和数字，不含名称。"
+            "顶栏：应用图标 + API累计已用 ※ 今日API使用量。"
         )
         dialog.run()
         dialog.destroy()
@@ -764,10 +764,9 @@ class LedgerApp:
     def _push_panel(self) -> None:
         snap = self.snap
         if snap is None or not snap.ok:
-            self.indicator.set_figures(None, None, None, tone="warn")
+            self.indicator.set_figures(None, None, tone="warn")
             return
         self.indicator.set_figures(
-            snap.remaining_days,
             snap.api_percent,
             snap.today_percent,
             tone=self.tone(),

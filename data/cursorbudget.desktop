@@ -1,12 +1,12 @@
 [Desktop Entry]
 Type=Application
 Name=CursorBudget
-GenericName=Cursor day ledger
-Comment=Local Cursor API day-ledger — floating card or GNOME top bar
+GenericName=Cursor 日账
+Comment=本机 Cursor API 日账：悬浮卡或 GNOME 顶栏
 Exec=cursorbudget
 Icon=cursorbudget
 Terminal=false
 Categories=Utility;Finance;
-Keywords=cursor;budget;api;usage;ledger;
+Keywords=cursor;budget;api;usage;ledger;日账;
 StartupNotify=false
 StartupWMClass=cursorbudget

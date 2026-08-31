@@ -1,8 +1,8 @@
 {
   "name": "cursorbudget",
   "displayName": "CursorBudget",
-  "description": "本机日账：追踪 Cursor API 用量、工作日剩余与今日消耗。登录态与用量只留在本机。",
-  "version": "1.0.2",
+  "description": "CursorBudget 可选编辑器配套：在状态栏显示与桌面端相同的日账摘要。主产品是 Ubuntu 桌面小工具（悬浮卡 / 顶栏）。",
+  "version": "1.0.3",
   "publisher": "local",
   "engines": {
     "vscode": "^1.85.0"
@@ -44,15 +44,15 @@
     "commands": [
       {
         "command": "cursorBudget.refresh",
-        "title": "CursorBudget: Refresh"
+        "title": "CursorBudget: 立即刷新"
       },
       {
         "command": "cursorBudget.openDashboard",
-        "title": "CursorBudget: Open Dashboard"
+        "title": "CursorBudget: 打开用量页"
       },
       {
         "command": "cursorBudget.quickMenu",
-        "title": "CursorBudget: Menu"
+        "title": "CursorBudget: 快捷菜单"
       }
     ]
   }

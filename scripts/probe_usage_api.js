@@ -1,17 +1,26 @@
 #!/usr/bin/env node
 /**
- * Probe Cursor usage APIs — run from cursor-daily-budget directory.
+ * Local debug probe for Cursor usage APIs.
+ * Writes only under ~/.config/cursorbudget/debug/ — never into the repo.
+ * Does not print tokens, emails, or full response bodies to stdout.
  */
 const { execSync } = require('child_process');
 const https = require('https');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
+function debugDir() {
+  const dir = path.join(os.homedir(), '.config', 'cursorbudget', 'debug');
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
 function readToken() {
-  const db = process.env.HOME + '/.config/Cursor/User/globalStorage/state.vscdb';
+  const db = path.join(os.homedir(), '.config', 'Cursor', 'User', 'globalStorage', 'state.vscdb');
   const script = `
 import sqlite3, json, base64
-conn = sqlite3.connect("${db}")
+conn = sqlite3.connect(${JSON.stringify(db)})
 cur = conn.cursor()
 cur.execute("SELECT value FROM ItemTable WHERE key='cursorAuth/accessToken'")
 row = cur.fetchone()
@@ -20,7 +29,7 @@ payload = json.loads(base64.urlsafe_b64decode(raw.split('.')[1] + '=='))
 uid = payload['sub'].split('|')[1]
 print(json.dumps({"userId": uid, "jwt": raw, "session": uid + "%3A%3A" + raw}))
 `;
-  return JSON.parse(execSync(`python3 -c '${script.replace(/'/g, "'\"'\"'")}'`, { encoding: 'utf-8' }));
+  return JSON.parse(execSync(`python3 -c ${JSON.stringify(script)}`, { encoding: 'utf-8' }));
 }
 
 function req(url, headers, method = 'GET', body = null) {
@@ -33,7 +42,7 @@ function req(url, headers, method = 'GET', body = null) {
       res.on('end', () => {
         let parsed = d;
         try { parsed = JSON.parse(d); } catch (_) {}
-        resolve({ status: res.statusCode, headers: res.headers, body: parsed, raw: d.slice(0, 2000) });
+        resolve({ status: res.statusCode, body: parsed });
       });
     });
     r.on('error', (e) => resolve({ status: 0, error: e.message }));
@@ -41,6 +50,11 @@ function req(url, headers, method = 'GET', body = null) {
     if (body) r.write(body);
     r.end();
   });
+}
+
+function bodyKeys(body) {
+  if (!body || typeof body !== 'object') return [];
+  return Object.keys(body).slice(0, 12);
 }
 
 async function main() {
@@ -89,20 +103,21 @@ async function main() {
       const r = await req(url, h);
       if (r.status === 200 && r.body && typeof r.body === 'object') {
         out.push({ url, authIdx: i, status: r.status, body: r.body });
-        console.log('OK', url, 'auth', i, JSON.stringify(r.body).slice(0, 500));
+        console.log('OK', url.replace(userId, '<redacted>'), 'auth', i, 'keys', bodyKeys(r.body).join(','));
         break;
       }
       if (r.status && r.status !== 401 && r.status !== 404 && r.status !== 405) {
-        console.log('?', url, 'auth', i, r.status, r.raw?.slice(0, 120));
+        console.log('?', url.replace(userId, '<redacted>'), 'auth', i, r.status);
       }
     }
   }
 
-  fs.writeFileSync(
-    path.join(__dirname, '../probe-results.json'),
-    JSON.stringify(out, null, 2),
-  );
-  console.log('\nWrote', out.length, 'successful endpoints to probe-results.json');
+  const dest = path.join(debugDir(), 'probe-results.json');
+  fs.writeFileSync(dest, JSON.stringify(out, null, 2));
+  console.log('\nWrote', out.length, 'successful endpoints to', dest);
 }
 
-main().catch(console.error);
+main().catch((err) => {
+  console.error(err.message || String(err));
+  process.exit(1);
+});

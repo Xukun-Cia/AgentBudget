@@ -1,11 +1,7 @@
 const vscode = require('vscode');
-const { readTokenFromDb, fetchUsageData } = require('./lib/cursorApi');
+const { fetchAndCompute } = require('./lib/compute');
 const { buildTooltipLines, fmtPct, formatTodayUsageStatusBar } = require('./lib/usageDetails');
-const {
-  calculateDailyBudget,
-  reloadHolidayData,
-  getWorkdayTimeInfo,
-} = require('./lib/workdays');
+const { reloadHolidayData } = require('./lib/workdays');
 
 let statusBarDaily;
 let statusBarUsed;
@@ -29,73 +25,13 @@ async function updateConfig(key, value) {
   await cfg.update(key, value, vscode.ConfigurationTarget.Global);
 }
 
-async function fetchAndCompute() {
+async function loadSnapshot() {
   const config = getConfig();
-  let membershipType = 'unknown';
-  let fetchError = null;
-  let usageSource = null;
-  let apiPercent = null;
-  let resetDate = null;
-  let summary = null;
-  let todayApiUsage = null;
-
-  try {
-    const tokenResult = readTokenFromDb();
-    if (tokenResult.error) {
-      fetchError = tokenResult.error;
-    } else {
-      const usage = await fetchUsageData(
-        tokenResult.sessionToken,
-        tokenResult.userId,
-        tokenResult.accessToken,
-      );
-      membershipType = usage.membershipType;
-      usageSource = usage.usageSource;
-      apiPercent = usage.apiUsedPercent;
-      resetDate = usage.resetDate;
-      summary = usage.summary;
-      todayApiUsage = usage.todayApiUsage;
-
-      if (usage.fetchErrors?.length && apiPercent === null) {
-        fetchError = usage.fetchErrors.join('; ');
-      } else if (usage.fetchErrors?.length) {
-        fetchError = usage.fetchErrors.join('; ');
-      }
-    }
-  } catch (err) {
-    fetchError = err.message || String(err);
-  }
-
-  if (!resetDate || apiPercent === null) {
-    return {
-      error: resetDate
-        ? '无法获取 API 用量，请确认已登录 Cursor 并重试'
-        : '无法获取计费周期/重置日，请确认已登录 Cursor 并重试',
-      membershipType,
-      fetchError,
-      usageSource,
-      refreshInterval: config.refreshInterval,
-    };
-  }
-
-  const cycleEnd = summary?.billingCycleEnd ?? resetDate;
-  const apiBudget = calculateDailyBudget(apiPercent, cycleEnd);
-  const workdayTimeInfo = getWorkdayTimeInfo(new Date());
-
-  return {
-    resetDate,
-    membershipType,
-    apiPercent,
-    apiBudget,
-    summary,
-    todayApiUsage,
-    fetchError,
-    usageSource,
-    workdayTimeInfo,
+  return fetchAndCompute({
     refreshInterval: config.refreshInterval,
     warningThreshold: config.warningThreshold,
     criticalThreshold: config.criticalThreshold,
-  };
+  });
 }
 
 function usageIcon(percent, warning, critical) {
@@ -183,7 +119,7 @@ async function promptRefreshInterval(currentValue) {
 
 async function showQuickMenu() {
   const picked = await vscode.window.showQuickPick(buildQuickPickItems(), {
-    title: 'Cursor Daily Budget',
+    title: 'CursorBudget',
     placeHolder: '选择操作',
   });
   if (!picked) return;
@@ -203,7 +139,7 @@ async function showQuickMenu() {
     case 'refresh': {
       reloadHolidayData();
       await refresh();
-      vscode.window.showInformationMessage('Cursor Budget: 已刷新');
+      vscode.window.showInformationMessage('CursorBudget: 已刷新');
       break;
     }
   }
@@ -211,7 +147,7 @@ async function showQuickMenu() {
 
 async function refresh() {
   try {
-    cachedData = await fetchAndCompute();
+    cachedData = await loadSnapshot();
     updateStatusBar(cachedData);
   } catch (err) {
     if (statusBarDays) {
@@ -259,7 +195,7 @@ function activate(context) {
     vscode.commands.registerCommand('cursorBudget.refresh', async () => {
       reloadHolidayData();
       await refresh();
-      vscode.window.showInformationMessage('Cursor Budget: 已刷新');
+      vscode.window.showInformationMessage('CursorBudget: 已刷新');
     }),
   );
 

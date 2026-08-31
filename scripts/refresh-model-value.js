@@ -293,8 +293,7 @@ function fmtDay(isoOrMs) {
   const prevEndMs = startMs;
   const { all: prevAll } = await fetchAll(t.sessionToken, prevStartMs, prevEndMs);
   const prevAgg = aggregateEvents(prevAll, autoBucketSet);
-  // 上周期 Cursor Models 池按当时 Ultra 惯例 $2000（上周期末 Auto%≈32.5% 反推一致）
-  const prevModels = toModels(prevAgg.by, apiLimitUsd, 2000);
+  const prevModels = toModels(prevAgg.by, apiLimitUsd, cursorLimitRounded);
   const prevValueBoard = valueBoard(prevModels);
   const prevCycleValue = Object.fromEntries(
     prevValueBoard.map((m) => [
@@ -304,20 +303,12 @@ function fmtDay(isoOrMs) {
   );
   const prevCycleLabel = `${fmtDay(prevStartMs)} – ${fmtDay(prevEndMs)}`;
 
-  const prev = [
-    { name: 'grok-4.6', tokens: 660025473, usagePct: 17.99639 },
-    { name: 'grok-4.5', tokens: 217608607, usagePct: 10.06315 },
-    { name: 'opus-5-high', tokens: 118514478, usagePct: 25.94954 },
-    { name: 'opus-5-medium', tokens: 39298786, usagePct: 7.20334 },
-    { name: 'opus-5-max', tokens: 32299049, usagePct: 7.07962 },
-    { name: 'fable-5-high', tokens: 31854136, usagePct: 14.3311 },
-    { name: 'fable-5-xhigh', tokens: 12560693, usagePct: 6.46496 },
-    { name: 'opus-4.6-high', tokens: 1287308, usagePct: 0.59465 },
-    { name: 'opus-4.6-max', tokens: 1190364, usagePct: 0.3658 },
-    { name: 'gpt-5.6-sol-high', tokens: 237433, usagePct: 0.15998 },
-    { name: 'claude-opus-4-8-thinking-high', tokens: 267073, usagePct: 0 },
-  ];
-  // 上次快照的 User API（不进 MODELS，更新回复仍须单独说明）
+  // Compare against the previous cycle fetched above — never embed personal snapshots in source.
+  const prev = prevModels.map((m) => ({
+    name: m.name,
+    tokens: m.tokens,
+    usagePct: m.usagePct,
+  }));
   const prevUserApi = { usd: 0, events: 0 };
 
   const rank = (arr) =>
@@ -400,10 +391,8 @@ function fmtDay(isoOrMs) {
 
   // 写回 empty-window canvas（脚本此前只打印，不写文件会导致看板不更新）
   const fs = require('fs');
-  const canvasPath =
-    process.env.MODEL_VALUE_CANVAS ||
-    '/home/ai-group/.cursor/projects/home-ai-group-Nest/canvases/cursor-model-value.canvas.tsx';
-  if (fs.existsSync(canvasPath)) {
+  const canvasPath = process.env.MODEL_VALUE_CANVAS;
+  if (canvasPath && fs.existsSync(canvasPath)) {
     let src = fs.readFileSync(canvasPath, 'utf8');
     const cycle = `${fmtDay(s.billingCycleStart)} – ${fmtDay(s.billingCycleEnd)}`;
     const modelsForCanvas = models.filter((m) => m.tokens > 0 || m.cents > 0);

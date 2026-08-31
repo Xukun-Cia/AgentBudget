@@ -2,3 +2,15 @@ probe-results.json
 .cursor/
 *.log
 .DS_Store
+dist/
+*.deb
+budget-logs/
+**/api-response.json
+.env
+*.vscdb
+*.vscdb-wal
+*.vscdb-shm
+__pycache__/
+*.pyc
+.venv/
+data/icons/

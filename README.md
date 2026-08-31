@@ -1,99 +1,127 @@
-# Cursor Daily Budget
+# CursorBudget
 
-Cursor / VS Code 状态栏扩展：自动拉取 Cursor 订阅用量，按**中国法定工作日**（9:00–20:00 连续折算）计算 API 每日预算，并在状态栏实时展示。
+本机日账：按**中国法定工作日**（9:00–20:00 连续折算）看 Cursor API 还剩多少、今天花了多少。
 
-## 功能
+有两副面孔，互不依赖：
 
-状态栏从左到右四项：
+1. **Ubuntu 桌面应用**（`.deb`）— 悬浮卡或钉在 GNOME 顶栏，不需要打开 Cursor 窗口
+2. **Cursor / VS Code 状态栏扩展** — 仍可装在编辑器里
 
-| 项 | 示例 | 说明 |
-|---|---|---|
-| 剩余工作日 | `10.52 day` | 到重置日前的 fractional 工作日 |
-| API 用量 | `API 44.99%` | 本计费周期 Other Models（API）池已用百分比 |
-| 今日用量 | `今日 2.81%` | 当日 9:00 至次日 9:00 的 API 消耗（占 API 池） |
-| 日估 | `日估 5.23%/d` | 剩余 API 额度 ÷ 剩余工作日；最后不足 1 个工作日时按剩余全额计，且保证日估+已用 ≤ 100% |
+登录态和用量**只留在这台电脑**。这个公开仓库是纯小工具，不含账号、token、邮箱或你的消费明细。
 
-悬停可查看额度金额、计费周期、Cursor Models（Auto）用量、套餐 included/bonus 等详情。点击状态栏打开快捷菜单。
+## 设计
 
-### 用量口径（Ultra）
+不是系统监视器。卡片是一本竖着翻的日账：宣纸 / 砚台两色，左侧赭石书脊，用量用朱砂提醒。顶栏只留三个没有名称的数字。
+
+| 表面 | 显示 |
+|---|---|
+| **顶栏** | `◔10.52  ▮44.99%  ◑2.81%` — 剩余工作日、本周期 API 用量、今日 API 用量。只有小图标和数字，没有中英名称 |
+| **悬浮卡** | 完整日账：日估、Auto 池、套餐 included/bonus、计费周期、工作日时钟 |
+
+右键（或点顶栏图标）可在「悬浮卡 / 顶栏」之间切换。
+
+### 用量口径
 
 与 Dashboard 百分比条对齐。分母优先用官方 `totalSpend` + 三个百分比反推，硬编码仅作回退：
 
-| 池 | 百分比分母（当前 Ultra） | 说明 |
+| 池 | 百分比分母（当前 Ultra 回退） | 说明 |
 |---|---|---|
 | Other Models（API） | **$500** | 第三方模型（Claude / GPT / Gemini 等） |
 | Cursor Models（Auto） | **$3000** | Auto / Composer / Grok / Vega |
 | 合计 | **$3500** | 对应 `totalPercentUsed` |
 
-`plan.limit` / `includedAmountCents`（Ultra 为 **$400**）是套餐「included」购买额度，到顶后会提示 hit usage limit，并可能继续吃 bonus；它与上方百分比条分母不是同一口径。
+`plan.limit`（Ultra 约 **$400**）是套餐 included 购买额度，和上面百分比条的分母不是同一口径。
 
-### 自动抓取
+今日窗口：当天 9:00 → 次日 9:00。日估 = 剩余 API% ÷ 剩余折算工作日；最后不足 1 个工作日时按剩余全额计，且日估 + 已用 ≤ 100%。
 
-- 从 Cursor 本地登录态读取 token，调用非官方 Dashboard API
-- 主接口：`GET cursor.com/api/usage-summary`（Ultra 等按用量计费计划）
-- 周期用量：`POST cursor.com/api/dashboard/get-current-period-usage`（`totalSpend`、`autoBucketModels`）
-- 备用：`api2.cursor.sh` Connect RPC
-- 今日 API 用量：按 usage events 汇总，排除 Cursor Models 池，以及未计费 / 自带 API Key 事件（最多 40 页）
+## 隐私红线
 
-### 工作日计算
+CursorBudget **没有云端账号，也不上传任何东西**。
 
-- 内置中国法定节假日与调休数据（`lib/holidays.json`）
-- 工作时段 9:00–20:00，按秒连续折算剩余工作日
-- 计费周期结束时间使用 API 返回的精确时刻（非按自然日 0 点截断）
+| 数据 | 在哪 | 会不会进 GitHub |
+|---|---|---|
+| Cursor 登录 JWT | 本机 `~/.config/Cursor/User/globalStorage/state.vscdb`（Cursor 自己写的） | 否 |
+| 用量请求 | 本机进程直连 `cursor.com`（和打开官网 Dashboard 一样） | 否 |
+| 桌面设置 | 本机 `~/.config/cursorbudget/config.json`（主题、刷新间隔，无账号） | 否 |
+| 调试落盘 | 仅当设置了 `CURSORBUDGET_DEBUG=1`，写到 `~/.config/cursorbudget/debug/` | 否（已 gitignore） |
 
-## 安装
+公开仓库里**不应出现**：token、userId、邮箱、`probe-results.json`、`api-response.json`、把个人 token 数 / 用量% 写死在源码里。
+
+桌面端通过 `lib/status-json.js` 取数，stdout **只有汇总数字**，不含 token / userId / 原始事件。
+
+软依赖：长期不打开 Cursor，本地 JWT 可能过期，需要再登录一次让 Cursor 写回 token。这是登录态新鲜度，不是必须挂着编辑器窗口。
+
+## 安装桌面版
+
+需要 Ubuntu 22.04+（GTK 3）、已登录过 Cursor、系统有 `nodejs`。顶栏模式需要 GNOME AppIndicator（Ubuntu 默认开启）。
 
 ```bash
-git clone https://github.com/Xukun-Cia/cursor-daily-budget.git
-cd cursor-daily-budget
+curl -LO https://github.com/Xukun-Cia/CursorBudget/releases/download/v1.0.0/cursorbudget_1.0.0_all.deb
+sudo apt install ./cursorbudget_1.0.0_all.deb
+cursorbudget
+```
+
+或从源码：
+
+```bash
+sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-3.0 python3-cairo nodejs
+git clone https://github.com/Xukun-Cia/CursorBudget.git
+cd CursorBudget
+PYTHONPATH=. python3 -m cursorbudget
+```
+
+打包：
+
+```bash
+./scripts/build-deb.sh
+# dist/cursorbudget_1.0.0_all.deb
+```
+
+配置在 `~/.config/cursorbudget/config.json`。默认 60 秒刷新。
+
+## 安装编辑器扩展
+
+```bash
+git clone https://github.com/Xukun-Cia/CursorBudget.git
+cd CursorBudget
 bash install.sh
 ```
 
-然后在 Cursor 中执行 **Developer: Reload Window**。
+然后在 Cursor 里执行 **Developer: Reload Window**。`install.sh` 同步到 `~/.cursor/extensions/local.cursorbudget-<version>/`。
 
-`install.sh` 会将扩展同步到 `~/.cursor/extensions/local.cursor-daily-budget-<version>/`。
+设置里搜索 `cursorBudget`：刷新间隔、是否显示状态栏、警告 / 严重阈值。
 
-## 配置
-
-在 Cursor 设置中搜索 `cursorBudget`：
-
-| 配置项 | 默认 | 说明 |
-|---|---|---|
-| `cursorBudget.refreshIntervalSeconds` | `60` | 自动刷新间隔（秒） |
-| `cursorBudget.showInStatusBar` | `true` | 是否显示状态栏 |
-| `cursorBudget.warningThresholdPercent` | `80` | 警告阈值 |
-| `cursorBudget.criticalThresholdPercent` | `95` | 严重警告阈值 |
-
-## 命令
-
-- `Cursor Budget: Refresh` — 立即刷新
-- `Cursor Budget: Menu` — 快捷菜单（刷新间隔、打开 Dashboard）
-- `Cursor Budget: Open Dashboard` — 打开 cursor.com/dashboard/usage
+命令：`CursorBudget: Refresh` / `Menu` / `Open Dashboard`。
 
 ## 要求
 
-- Cursor 或 VS Code ≥ 1.85
-- 已登录 Cursor 账号
-- 系统需有 `python3`（用于读取本地 SQLite 中的 auth token）
+- 桌面版：Python 3.8+、PyGObject、GTK 3、Node.js、本机已有 Cursor 登录态
+- 扩展：Cursor 或 VS Code ≥ 1.85，系统有 `python3`（读本地 SQLite）
 
-## 目录结构
+## 目录
 
 ```
-cursor-daily-budget/
-├── extension.js          # 扩展入口
+CursorBudget/
+├── cursorbudget/         # Ubuntu 桌面应用（日账卡片 + 顶栏）
+├── bin/cursorbudget
+├── data/cursorbudget.desktop
+├── extension.js          # 编辑器扩展
 ├── package.json
-├── install.sh            # 安装到 ~/.cursor/extensions/
+├── install.sh
 ├── lib/
-│   ├── cursorApi.js      # Token 读取 & API 请求
-│   ├── usageDetails.js   # 用量解析 & 悬停文案
-│   ├── workdays.js       # 工作日 / 日估计算
-│   └── holidays.json     # 节假日数据
-└── budget.py             # 可选：终端版（独立脚本）
+│   ├── compute.js        # 共享：取数 + 日估
+│   ├── status-json.js    # 桌面端 CLI，只输出脱敏快照
+│   ├── cursorApi.js      # 读本地 token，请求 Dashboard
+│   ├── usageDetails.js
+│   ├── workdays.js
+│   └── holidays.json
+├── scripts/build-deb.sh
+└── budget.py             # 旧终端脚本，口径已过时
 ```
 
 ## 免责声明
 
-本扩展使用 Cursor Dashboard 的**非公开 API**，可能随 Cursor 更新而失效。仅供个人使用，与 Cursor 官方无关。
+使用 Cursor Dashboard 的**非公开 API**，可能随 Cursor 更新失效。仅供个人使用，与 Cursor 官方无关。
 
 ## License
 

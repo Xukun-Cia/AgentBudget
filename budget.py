@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """
-Cursor Daily Budget — 终端版
-每分钟刷新，显示到 Plan 重置日前每个工作日的 API/Composer 可用额度。
+CursorBudget — 旧终端脚本（口径已过时，仅供对照）。
+
+请使用桌面应用 `cursorbudget` 或编辑器扩展。本脚本仍走旧 /api/usage，
+日估按整日工作日计数，与当前 Dashboard 百分比条不一致。
+
 用法:
     python3 budget.py                       # 交互式，首次运行会提示输入
     python3 budget.py --api 3 --comp 1      # 直接指定用量百分比

@@ -1,8 +1,8 @@
 {
-  "name": "cursor-daily-budget",
-  "displayName": "Cursor Daily Budget",
-  "description": "自动追踪 Cursor API 用量、工作日每日预算与今日 API 消耗",
-  "version": "0.9.0",
+  "name": "cursorbudget",
+  "displayName": "CursorBudget",
+  "description": "本机日账：追踪 Cursor API 用量、工作日剩余与今日消耗。登录态与用量只留在本机。",
+  "version": "1.0.0",
   "publisher": "local",
   "engines": {
     "vscode": "^1.85.0"
@@ -12,7 +12,7 @@
   "main": "./extension.js",
   "contributes": {
     "configuration": {
-      "title": "Cursor Daily Budget",
+      "title": "CursorBudget",
       "properties": {
         "cursorBudget.refreshIntervalSeconds": {
           "type": "number",
@@ -44,15 +44,15 @@
     "commands": [
       {
         "command": "cursorBudget.refresh",
-        "title": "Cursor Budget: Refresh"
+        "title": "CursorBudget: Refresh"
       },
       {
         "command": "cursorBudget.openDashboard",
-        "title": "Cursor Budget: Open Dashboard"
+        "title": "CursorBudget: Open Dashboard"
       },
       {
         "command": "cursorBudget.quickMenu",
-        "title": "Cursor Budget: Menu"
+        "title": "CursorBudget: Menu"
       }
     ]
   }

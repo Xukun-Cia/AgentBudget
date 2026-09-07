@@ -6,7 +6,8 @@ import json
 import os
 import shutil
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterator, Optional
 
@@ -44,6 +45,9 @@ class Snapshot:
     usage_source: Optional[str] = None
     gpt_ok: bool = False
     gpt_error: Optional[str] = None
+    gpt_transient: bool = False
+    gpt_stale: bool = False
+    gpt_fetched_at: Optional[str] = None
     gpt_plan: Optional[str] = None
     gpt_percent: Optional[float] = None
     gpt_reset_at: Optional[str] = None
@@ -164,6 +168,9 @@ def snapshot_from_dict(data: dict) -> Snapshot:
         usage_source=data.get("usageSource") or None,
         gpt_ok=bool(data.get("gptOk")),
         gpt_error=data.get("gptError") or None,
+        gpt_transient=bool(data.get("gptTransient")),
+        gpt_stale=bool(data.get("gptStale")),
+        gpt_fetched_at=data.get("gptFetchedAt") or None,
         gpt_plan=data.get("gptPlan") or None,
         gpt_percent=_num(data.get("gptPercent")),
         gpt_reset_at=data.get("gptResetAt") or None,
@@ -176,6 +183,39 @@ def snapshot_from_dict(data: dict) -> Snapshot:
         gpt_windows=_gpt_rows(data.get("gptWindows")),
         gpt_extras=_extras(data.get("gptExtras")),
     )
+
+
+GPT_STALE_MAX_SEC = 15 * 60
+
+
+def preserve_last_good_gpt(current: Snapshot, previous: Optional[Snapshot]) -> Snapshot:
+    """Reuse a recent GPT value only for a transient failed refresh."""
+    if current.gpt_ok and current.gpt_percent is not None:
+        return replace(current, gpt_stale=False)
+    if not current.gpt_transient or previous is None:
+        return current
+    if not previous.gpt_ok or previous.gpt_percent is None or not previous.gpt_fetched_at:
+        return current
+    try:
+        fetched = datetime.fromisoformat(previous.gpt_fetched_at.replace("Z", "+00:00"))
+        age = (datetime.now(timezone.utc) - fetched.astimezone(timezone.utc)).total_seconds()
+    except (TypeError, ValueError):
+        return current
+    if age < 0 or age > GPT_STALE_MAX_SEC:
+        return current
+
+    values = {
+        field: getattr(previous, field)
+        for field in Snapshot.__dataclass_fields__
+        if field.startswith("gpt_")
+    }
+    values.update({
+        "gpt_ok": True,
+        "gpt_error": current.gpt_error or "GPT 用量暂时刷新失败",
+        "gpt_transient": True,
+        "gpt_stale": True,
+    })
+    return replace(current, **values)
 
 
 def _extras(value) -> tuple:

@@ -1,5 +1,5 @@
 const vscode = require('vscode');
-const { fetchAndCompute } = require('./lib/compute');
+const { fetchAndCompute, preserveLastGoodGpt } = require('./lib/compute');
 const { buildTooltipLines, fmtPct, fmtGptPct } = require('./lib/usageDetails');
 const { reloadHolidayData } = require('./lib/workdays');
 
@@ -7,6 +7,7 @@ let statusBarDaily;
 let statusBarUsed;
 let statusBarGpt;
 let refreshTimer;
+let refreshInFlight = null;
 let cachedData = null;
 
 function getConfig() {
@@ -39,6 +40,11 @@ function usageIcon(percent, warning, critical) {
   return '$(pulse)';
 }
 
+function gptStatusText(gpt) {
+  const stale = gpt && gpt.stale ? '~' : '';
+  return `$(globe) G ${stale}${fmtGptPct(gpt && gpt.percent)}`;
+}
+
 function updateStatusBar(data) {
   const items = [statusBarUsed, statusBarDaily, statusBarGpt];
   if (items.some((item) => !item)) return;
@@ -60,7 +66,7 @@ function updateStatusBar(data) {
     statusBarUsed.show();
     const gpt = data.gpt || {};
     if (gpt.ok) {
-      statusBarGpt.text = `$(globe) G ${fmtGptPct(gpt.percent)}`;
+      statusBarGpt.text = gptStatusText(gpt);
       statusBarGpt.tooltip = tooltip;
       statusBarGpt.command = 'cursorBudget.quickMenu';
       statusBarGpt.show();
@@ -76,7 +82,7 @@ function updateStatusBar(data) {
   statusBarDaily.text = `$(graph) Cursor ${fmtPct(data.summary && data.summary.autoPercentUsed)}`;
   const gpt = data.gpt || {};
   if (gpt.ok) {
-    statusBarGpt.text = `$(globe) G ${fmtGptPct(gpt.percent)}`;
+    statusBarGpt.text = gptStatusText(gpt);
     statusBarGpt.show();
   } else {
     statusBarGpt.text = '$(globe) G —';
@@ -164,18 +170,31 @@ async function showQuickMenu() {
 }
 
 async function refresh() {
-  try {
-    cachedData = await loadSnapshot();
-    updateStatusBar(cachedData);
-  } catch (err) {
-    if (statusBarUsed) {
-      statusBarUsed.text = '$(error) Budget Error';
-      statusBarUsed.tooltip = String(err);
-      statusBarUsed.command = undefined;
-      statusBarUsed.show();
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = (async () => {
+    try {
+      const nextData = await loadSnapshot();
+      nextData.gpt = preserveLastGoodGpt(
+        nextData.gpt,
+        cachedData && cachedData.gpt,
+      );
+      cachedData = nextData;
+      updateStatusBar(cachedData);
+    } catch (err) {
+      if (statusBarUsed) {
+        statusBarUsed.text = '$(error) Budget Error';
+        statusBarUsed.tooltip = String(err);
+        statusBarUsed.command = undefined;
+        statusBarUsed.show();
+      }
+      if (statusBarDaily) statusBarDaily.hide();
+      if (statusBarGpt) statusBarGpt.hide();
     }
-    if (statusBarDaily) statusBarDaily.hide();
-    if (statusBarGpt) statusBarGpt.hide();
+  })();
+  try {
+    await refreshInFlight;
+  } finally {
+    refreshInFlight = null;
   }
 }
 

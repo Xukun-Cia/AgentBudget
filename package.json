@@ -2,7 +2,7 @@
   "name": "cursorbudget",
   "displayName": "CursorBudget",
   "description": "CursorBudget 可选编辑器配套：只显示 Cursor API、Cursor Models 与 GPT 周额度三项核心指标。",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "publisher": "local",
   "engines": {
     "vscode": "^1.85.0"

@@ -2,7 +2,7 @@
 const assert = require('assert');
 const { parseUsagePayload } = require('../lib/gptApi');
 const { fmtGptPct } = require('../lib/usageDetails');
-const { toPublicSnapshot } = require('../lib/compute');
+const { preserveLastGoodGpt, toPublicSnapshot } = require('../lib/compute');
 const { redactPrivate } = require('../lib/privacy');
 
 const legacy = parseUsagePayload({
@@ -47,6 +47,27 @@ assert.strictEqual(fmtGptPct(1), '1%');
 assert.strictEqual(fmtGptPct(1.5), '1.5%');
 assert.strictEqual(fmtGptPct(1.25), '1.25%');
 
+const fetchedAt = '2026-09-07T01:00:00.000Z';
+const lastGood = { ok: true, percent: 3, fetchedAt, stale: false };
+const transientFailure = { ok: false, transient: true, error: 'timeout', percent: null };
+const cached = preserveLastGoodGpt(
+  transientFailure,
+  lastGood,
+  Date.parse(fetchedAt) + 60 * 1000,
+);
+assert.strictEqual(cached.ok, true);
+assert.strictEqual(cached.percent, 3);
+assert.strictEqual(cached.stale, true);
+assert.strictEqual(cached.error, 'timeout');
+assert.strictEqual(
+  preserveLastGoodGpt({ ok: false, transient: false }, lastGood, Date.parse(fetchedAt) + 1000).ok,
+  false,
+);
+assert.strictEqual(
+  preserveLastGoodGpt(transientFailure, lastGood, Date.parse(fetchedAt) + 16 * 60 * 1000).ok,
+  false,
+);
+
 const redacted = redactPrivate({
   nested: { email: 'private@example.com', accessToken: 'secret' },
   text: 'Bearer abcdefghijklmnopqrstuvwxyz',
@@ -61,6 +82,9 @@ const publicJson = JSON.stringify(toPublicSnapshot({
   gpt: {
     ok: true,
     percent: 1,
+    transient: false,
+    stale: false,
+    fetchedAt,
     accessToken: 'must-not-appear',
     accountId: 'must-not-appear',
     windows: legacy.windows,
@@ -69,5 +93,8 @@ const publicJson = JSON.stringify(toPublicSnapshot({
 assert(!publicJson.includes('must-not-appear'));
 assert(!publicJson.includes('accessToken'));
 assert(!publicJson.includes('accountId'));
+const publicData = JSON.parse(publicJson);
+assert.strictEqual(publicData.gptFetchedAt, fetchedAt);
+assert.strictEqual(publicData.gptStale, false);
 
 console.log('All tests passed.');

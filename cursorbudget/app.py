@@ -16,7 +16,7 @@ gi.require_version("Gdk", "3.0")
 from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
 from . import __app_name__, __version__
-from .fetch import Snapshot, fetch_snapshot
+from .fetch import Snapshot, fetch_snapshot, preserve_last_good_gpt
 from .icon import paint_mark
 from .indicator import PanelIndicator
 from .settings import (
@@ -457,6 +457,7 @@ class LedgerWindow(Gtk.Window):
         if snap.gpt_ok:
             gpt_sub = " · ".join(
                 part for part in (
+                    "缓存值" if snap.gpt_stale else "",
                     snap.gpt_plan or "GPT",
                     f"重置 {_fmt_when(snap.gpt_reset_at)}" if snap.gpt_reset_at else "",
                 ) if part
@@ -778,6 +779,7 @@ class LedgerApp:
         threading.Thread(target=work, daemon=True).start()
 
     def _on_snapshot(self, snap: Snapshot) -> bool:
+        snap = preserve_last_good_gpt(snap, self.snap)
         self.snap = snap
         self.fetching = False
         self.last_updated = _clock_now()[:5]
@@ -810,6 +812,7 @@ class LedgerApp:
                 snap.auto_percent if snap else None,
                 snap.gpt_percent if snap else None,
                 tone="warn",
+                gpt_stale=bool(snap and snap.gpt_stale),
             )
             return
         self.indicator.set_figures(
@@ -817,6 +820,7 @@ class LedgerApp:
             snap.auto_percent,
             snap.gpt_percent if snap.gpt_ok else None,
             tone=self.tone(),
+            gpt_stale=snap.gpt_stale,
         )
 
     def quit(self) -> None:

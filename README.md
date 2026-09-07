@@ -29,7 +29,7 @@
 本地构建后的升级包可直接安装：
 
 ```bash
-sudo apt install ./dist/cursorbudget_1.2.0_all.deb
+sudo apt install ./dist/cursorbudget_1.2.1_all.deb
 cursorbudget
 ```
 
@@ -75,6 +75,8 @@ PYTHONPATH=. python3 -m cursorbudget
 | 订阅周期 | id_token 里的 active_start / active_until | 只作日期，不写邮箱 |
 
 没有 GPT 登录态时，卡上仍留「GPT 周额度」一行，并写明原因；Cursor 账本不受影响。解析器同时兼容当前 ChatGPT 用量响应与官方 app-server 的多额度结构，但不会为每次刷新另启 app-server，以避免和已登录桌面应用争用 refresh token。
+
+网络超时、限流或服务端临时错误会自动重试一次；若仍失败，应用会把最近 15 分钟内的有效 GPT 百分比标为「缓存值」继续显示（顶栏用 `~` 标记）。登录过期等非临时错误不会被缓存掩盖。
 
 - **今日窗口**：当天 9:00 → 次日 9:00  
 - **日估**：剩余 API% ÷ 剩余折算工作日；最后不足 1 个工作日时按剩余全额计，且日估 + 已用 ≤ 100%

@@ -1,12 +1,12 @@
 #!/bin/bash
 # Optional: sync the editor companion into local Cursor.
 # The main product is the Ubuntu desktop app — install the .deb (see README).
-VERSION="1.2.0"
+VERSION="1.2.1"
 for ver in 0.1.0 0.2.0 0.3.0 0.3.1 0.4.0 0.5.0 0.5.1 0.5.2 0.5.3 0.5.4 0.6.0 0.6.1 0.6.2 0.6.3 0.6.4 0.7.0 0.8.0 0.8.1 0.9.0; do
   [ -d "$HOME/.cursor/extensions/local.cursor-daily-budget-$ver" ] && \
     rm -rf "$HOME/.cursor/extensions/local.cursor-daily-budget-$ver"
 done
-for ver in 1.0.0 1.0.1 1.0.2 1.0.3 1.1.0 1.2.0; do
+for ver in 1.0.0 1.0.1 1.0.2 1.0.3 1.1.0 1.2.0 1.2.1; do
   [ -d "$HOME/.cursor/extensions/local.cursorbudget-$ver" ] && \
     rm -rf "$HOME/.cursor/extensions/local.cursorbudget-$ver"
 done

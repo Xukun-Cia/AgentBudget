@@ -12,7 +12,7 @@ CONFIG_PATH = CONFIG_DIR / "config.json"
 
 # Logical design size — Ink Ledger daybook proportions.
 BASE_W = 336
-BASE_H = 568
+BASE_H = 700
 
 DISPLAY_MODES = ("window", "panel")
 DISPLAY_MODE_LABELS = {

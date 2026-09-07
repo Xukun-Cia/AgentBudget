@@ -39,11 +39,10 @@ Priority: optional
 Architecture: ${ARCH}
 Depends: python3 (>= 3.8), python3-gi, python3-gi-cairo, gir1.2-gtk-3.0, python3-cairo, nodejs
 Maintainer: Xukun-Cia <noreply@users.noreply.github.com>
-Description: Local Cursor API day-ledger for Ubuntu
+Description: Local Cursor and GPT subscription ledger for Ubuntu
  CursorBudget is a small Ubuntu desktop tool: an Ink Ledger floating
- card or a compact GNOME top-bar readout. Login state and usage stay
- on this machine. An optional Cursor editor companion is available
- from the same repository.
+ card or a compact GNOME top-bar readout for Cursor and GPT
+ subscriptions. Login state and usage stay on this machine.
 EOF
 
 cat > "${PKG_DIR}/DEBIAN/postinst" <<'EOF'

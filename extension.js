@@ -7,6 +7,7 @@ let statusBarDaily;
 let statusBarUsed;
 let statusBarDays;
 let statusBarToday;
+let statusBarGpt;
 let refreshTimer;
 let cachedData = null;
 
@@ -41,7 +42,7 @@ function usageIcon(percent, warning, critical) {
 }
 
 function updateStatusBar(data) {
-  const items = [statusBarDays, statusBarUsed, statusBarToday, statusBarDaily];
+  const items = [statusBarDays, statusBarUsed, statusBarToday, statusBarDaily, statusBarGpt];
   if (items.some((item) => !item)) return;
 
   const config = getConfig();
@@ -61,6 +62,15 @@ function updateStatusBar(data) {
     statusBarDays.tooltip = [data.error, data.fetchError || ''].filter(Boolean).join('\n');
     statusBarDays.command = 'cursorBudget.quickMenu';
     statusBarDays.show();
+    const gpt = data.gpt || {};
+    if (gpt.ok) {
+      statusBarGpt.text = `$(globe) G ${fmtPct(gpt.percent)}`;
+      statusBarGpt.tooltip = tooltip;
+      statusBarGpt.command = 'cursorBudget.quickMenu';
+      statusBarGpt.show();
+    } else {
+      statusBarGpt.hide();
+    }
     return;
   }
 
@@ -72,6 +82,14 @@ function updateStatusBar(data) {
   statusBarToday.text = `$(history) ${formatTodayUsageStatusBar(data.todayApiUsage)}`;
   const dailyLabel = data.apiBudget.isLastStretch ? '剩余' : '日估';
   statusBarDaily.text = `$(graph) ${dailyLabel} ${dailyBudget.toFixed(2)}%${data.apiBudget.isLastStretch ? '' : '/d'}`;
+  const gpt = data.gpt || {};
+  if (gpt.ok) {
+    statusBarGpt.text = `$(globe) G ${fmtPct(gpt.percent)}`;
+    statusBarGpt.show();
+  } else {
+    statusBarGpt.text = '$(globe) G —';
+    statusBarGpt.show();
+  }
 
   for (const item of items) {
     item.tooltip = tooltip;
@@ -87,6 +105,11 @@ function buildQuickPickItems() {
       label: '$(globe) 打开 Cursor 用量 Dashboard',
       description: 'cursor.com/dashboard/usage',
       id: 'dashboard',
+    },
+    {
+      label: '$(globe) 打开 GPT 用量页',
+      description: 'chatgpt.com settings',
+      id: 'gptDashboard',
     },
     {
       label: '$(watch) 设置刷新间隔（秒）',
@@ -130,6 +153,9 @@ async function showQuickMenu() {
     case 'dashboard':
       vscode.env.openExternal(vscode.Uri.parse('https://cursor.com/dashboard/usage'));
       break;
+    case 'gptDashboard':
+      vscode.env.openExternal(vscode.Uri.parse('https://chatgpt.com/#settings/Usage'));
+      break;
     case 'refreshInterval': {
       const val = await promptRefreshInterval(config.refreshInterval);
       if (val === undefined) return;
@@ -159,6 +185,7 @@ async function refresh() {
     if (statusBarUsed) statusBarUsed.hide();
     if (statusBarToday) statusBarToday.hide();
     if (statusBarDaily) statusBarDaily.hide();
+    if (statusBarGpt) statusBarGpt.hide();
   }
 }
 
@@ -190,6 +217,7 @@ function activate(context) {
   statusBarUsed = createStatusBarItem(context, -98);
   statusBarToday = createStatusBarItem(context, -99);
   statusBarDaily = createStatusBarItem(context, -100);
+  statusBarGpt = createStatusBarItem(context, -101);
 
   context.subscriptions.push(
     vscode.commands.registerCommand('cursorBudget.refresh', async () => {
@@ -224,13 +252,14 @@ function activate(context) {
 
 function deactivate() {
   stopTimer();
-  for (const item of [statusBarDaily, statusBarUsed, statusBarDays, statusBarToday]) {
+  for (const item of [statusBarDaily, statusBarUsed, statusBarDays, statusBarToday, statusBarGpt]) {
     if (item) item.dispose();
   }
   statusBarDaily = null;
   statusBarUsed = null;
   statusBarDays = null;
   statusBarToday = null;
+  statusBarGpt = null;
 }
 
 module.exports = { activate, deactivate };

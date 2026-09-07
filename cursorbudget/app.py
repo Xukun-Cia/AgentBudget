@@ -36,6 +36,19 @@ from .settings import (
 )
 
 DASHBOARD_URL = "https://cursor.com/dashboard/usage"
+GPT_DASHBOARD_URL = "https://chatgpt.com/#settings/Usage"
+
+
+def _fmt_window(seconds: Optional[float]) -> str:
+    if seconds is None or not math.isfinite(seconds) or seconds <= 0:
+        return "限额窗"
+    if seconds >= 86400 and abs(seconds % 86400) < 1:
+        days = int(round(seconds / 86400))
+        return f"{days}日窗"
+    if seconds >= 3600:
+        hours = int(round(seconds / 3600))
+        return f"{hours}时窗"
+    return f"{int(round(seconds))}秒窗"
 
 
 def _rgba(cr: cairo.Context, rgb, a: float = 1.0) -> None:
@@ -191,7 +204,7 @@ class SettingsDialog(Gtk.Dialog):
         grid.attach(self.crit_spin, 1, 5, 1, 1)
 
         hint = Gtk.Label(
-            label="顶栏：应用图标 + API累计% ※ 今日API%。完整日账在悬浮卡。",
+            label="顶栏：API累计% ※ 今日API% · G 周限%。完整日账在悬浮卡。",
             xalign=0,
         )
         hint.set_line_wrap(True)
@@ -237,9 +250,12 @@ def _build_menu(app: "LedgerApp", *, show_always_on_top: bool) -> Gtk.Menu:
         app._item_top = item_top
 
     menu.append(Gtk.SeparatorMenuItem())
-    item_dash = Gtk.MenuItem(label="打开用量页")
+    item_dash = Gtk.MenuItem(label="打开 Cursor 用量页")
     item_dash.connect("activate", lambda *_: app.open_dashboard())
     menu.append(item_dash)
+    item_gpt = Gtk.MenuItem(label="打开 GPT 用量页")
+    item_gpt.connect("activate", lambda *_: app.open_gpt_dashboard())
+    menu.append(item_gpt)
     item_refresh = Gtk.MenuItem(label="立即刷新")
     item_refresh.connect("activate", lambda *_: app.refresh_now())
     menu.append(item_refresh)
@@ -410,6 +426,19 @@ class LedgerWindow(Gtk.Window):
             self._wrapped_text(cr, snap.error or "无法读取用量", pad_l, 80, content_w, ink=cinnabar)
             if snap.fetch_error:
                 self._wrapped_text(cr, snap.fetch_error, pad_l, 128, content_w, ink=ink_soft)
+            if snap.gpt_ok:
+                y = self._pool_section(
+                    cr, pad_l, pad_r, 190, content_w,
+                    "GPT 周限", _fmt_pct(snap.gpt_percent),
+                    "  ·  ".join(
+                        part for part in (
+                            snap.gpt_plan or "GPT",
+                            _fmt_window(snap.gpt_window_seconds),
+                            f"重置  {_fmt_when(snap.gpt_reset_at)}" if snap.gpt_reset_at else "",
+                        ) if part
+                    ),
+                    snap.gpt_percent, ochre, ink, ink_soft, rule,
+                )
             return
 
         # Hero — remaining workdays
@@ -443,6 +472,43 @@ class LedgerWindow(Gtk.Window):
             "Cursor 池", _fmt_pct(snap.auto_percent), cursor_sub,
             snap.auto_percent, ochre, ink, ink_soft, rule,
         )
+
+        gpt_accent = cinnabar if snap.gpt_limit_reached else ochre
+        if snap.gpt_ok:
+            gpt_bits = [snap.gpt_plan or "GPT"]
+            gpt_bits.append(_fmt_window(snap.gpt_window_seconds))
+            if snap.gpt_reset_at:
+                gpt_bits.append(f"重置  {_fmt_when(snap.gpt_reset_at)}")
+            y = self._pool_section(
+                cr, pad_l, pad_r, y, content_w,
+                "GPT 周限", _fmt_pct(snap.gpt_percent), "  ·  ".join(gpt_bits),
+                snap.gpt_percent, gpt_accent, ink, ink_soft, rule,
+            )
+            busy_extras = [(name, pct) for name, pct in snap.gpt_extras if pct >= 0.1]
+            if busy_extras:
+                _set_font(cr, bold=False, size=11)
+                _rgba(cr, ink_soft)
+                extra = "  ·  ".join(f"{name} {_fmt_pct(pct)}" for name, pct in busy_extras)
+                cr.move_to(pad_l, y - 8)
+                cr.show_text(extra)
+                y += 10
+        else:
+            self._rule(cr, pad_l, y, pad_r, rule)
+            base = y + 32
+            _set_font(cr, bold=False, size=11)
+            _rgba(cr, ink_soft)
+            cr.move_to(pad_l, base)
+            cr.show_text("GPT 周限")
+            _set_font(cr, bold=True, size=22)
+            _rgba(cr, ink)
+            tw = cr.text_extents("—").width
+            cr.move_to(pad_r - tw, base)
+            cr.show_text("—")
+            _set_font(cr, bold=False, size=12)
+            _rgba(cr, ink_soft)
+            cr.move_to(pad_l, base + 24)
+            cr.show_text(snap.gpt_error or "尚未读到 GPT 登录态")
+            y = base + 24 + 28
 
         # Today — quieter, no meter
         self._rule(cr, pad_l, y, pad_r, rule)
@@ -595,6 +661,7 @@ class LedgerApp:
         self.indicator = PanelIndicator(
             on_mode=self.set_mode,
             on_dashboard=self.open_dashboard,
+            on_gpt_dashboard=self.open_gpt_dashboard,
             on_refresh=self.refresh_now,
             on_settings=self.open_settings,
             on_about=self.show_about,
@@ -713,8 +780,8 @@ class LedgerApp:
         )
         dialog.format_secondary_text(
             "本机日账。登录态与用量只留在这台电脑上，不经过第三方服务器。\n"
-            "悬浮卡：左键拖动，右键切换顶栏。\n"
-            "顶栏：应用图标 + API累计已用 ※ 今日API使用量。"
+            "Cursor 走本机编辑器登录；GPT 走本机 GPT App / ~/.codex 登录。\n"
+            "悬浮卡：左键拖动，右键菜单。顶栏：API累计% ※ 今日API% · G 周限%。"
         )
         dialog.run()
         dialog.destroy()
@@ -724,6 +791,12 @@ class LedgerApp:
         if parsed.scheme != "https" or parsed.netloc != "cursor.com":
             return
         Gtk.show_uri_on_window(self.window, DASHBOARD_URL, Gdk.CURRENT_TIME)
+
+    def open_gpt_dashboard(self) -> None:
+        parsed = urlparse(GPT_DASHBOARD_URL)
+        if parsed.scheme != "https" or parsed.netloc != "chatgpt.com":
+            return
+        Gtk.show_uri_on_window(self.window, GPT_DASHBOARD_URL, Gdk.CURRENT_TIME)
 
     def refresh_now(self) -> None:
         if self.fetching:
@@ -764,11 +837,12 @@ class LedgerApp:
     def _push_panel(self) -> None:
         snap = self.snap
         if snap is None or not snap.ok:
-            self.indicator.set_figures(None, None, tone="warn")
+            self.indicator.set_figures(None, None, snap.gpt_percent if snap else None, tone="warn")
             return
         self.indicator.set_figures(
             snap.api_percent,
             snap.today_percent,
+            snap.gpt_percent if snap.gpt_ok else None,
             tone=self.tone(),
         )
 

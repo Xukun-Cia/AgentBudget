@@ -1,6 +1,6 @@
 # CursorBudget
 
-本机 **Cursor API 日账**小工具：按中国法定工作日（每天 9:00–20:00 连续折算）看本周期还剩多少、今天花了多少。
+本机 **Cursor + GPT 订阅日账**小工具：按中国法定工作日（每天 9:00–20:00 连续折算）看 Cursor 本周期还剩多少、今天花了多少；同时读本机 GPT App 登录态，展示 ChatGPT Pro 的周限额。
 
 > **主产品是 Ubuntu 桌面应用**（`.deb`）：悬浮卡或钉在 GNOME 顶栏，不必打开 Cursor 窗口。  
 > 同仓库另有可选的 **Cursor 编辑器配套**，方便在状态栏扫一眼；两者共用取数逻辑，互不依赖。
@@ -15,8 +15,8 @@
 
 | 模式 | 做什么 |
 |---|---|
-| **悬浮卡** | Ink Ledger 日账：剩余工作日、**API 池**、**Cursor 池**、今日 API、日估、套餐与周期 |
-| **顶栏** | 应用图标 + 两个数字：`API累计% ※ 今日API%`（例如 `67.09% ※ 3.93%`） |
+| **悬浮卡** | Ink Ledger 日账：剩余工作日、**API 池**、**Cursor 池**、**GPT 周限**、今日 API、日估、套餐与周期 |
+| **顶栏** | 应用图标 + `API累计% ※ 今日API% · G 周限%`（例如 `67.09% ※ 3.93% · G 0.00%`） |
 
 右键卡片或点顶栏条目，可在「悬浮卡 / 顶栏」之间切换。
 
@@ -27,8 +27,8 @@
 需要 Ubuntu 22.04+（GTK 3）、本机已登录过 Cursor、系统有 `nodejs`。顶栏模式需要 GNOME AppIndicator（Ubuntu 默认开启）。
 
 ```bash
-curl -LO https://github.com/Xukun-Cia/CursorBudget/releases/download/v1.0.3/cursorbudget_1.0.3_all.deb
-sudo apt install ./cursorbudget_1.0.3_all.deb
+curl -LO https://github.com/Xukun-Cia/CursorBudget/releases/download/v1.1.0/cursorbudget_1.1.0_all.deb
+sudo apt install ./cursorbudget_1.1.0_all.deb
 cursorbudget
 ```
 
@@ -64,6 +64,16 @@ PYTHONPATH=. python3 -m cursorbudget
 
 `plan.limit`（Ultra 约 **$400**）是套餐 included 购买额度，和上面百分比条的分母不是同一口径。
 
+**GPT / ChatGPT Pro**（本机已登录官方 GPT App 时）：
+
+| 项 | 来源 | 说明 |
+|---|---|---|
+| 套餐 | `~/.codex/auth.json` 的 plan claim + `/backend-api/wham/usage` | 例如 Pro |
+| 周限 % | `rate_limit.primary_window.used_percent` | 默认约 7 日窗，到点重置 |
+| 订阅周期 | id_token 里的 active_start / active_until | 只作日期，不写邮箱 |
+
+没有 GPT 登录态时，卡上仍留「GPT 周限」一行，并写明原因；Cursor 账本不受影响。
+
 - **今日窗口**：当天 9:00 → 次日 9:00  
 - **日估**：剩余 API% ÷ 剩余折算工作日；最后不足 1 个工作日时按剩余全额计，且日估 + 已用 ≤ 100%
 
@@ -76,7 +86,8 @@ CursorBudget **没有云端账号，也不上传任何东西**。
 | 数据 | 在哪 | 会不会进 GitHub |
 |---|---|---|
 | Cursor 登录 JWT | 本机 `~/.config/Cursor/User/globalStorage/state.vscdb`（Cursor 写入） | 否 |
-| 用量请求 | 本机进程直连 `cursor.com`（与打开官网 Dashboard 相同） | 否 |
+| GPT 登录 JWT | 本机 `~/.codex/auth.json`（官方 GPT App / Codex 写入） | 否 |
+| 用量请求 | 本机进程直连 `cursor.com` 与 `chatgpt.com`（与打开官网相同） | 否 |
 | 桌面设置 | 本机 `~/.config/cursorbudget/config.json` | 否 |
 | 调试落盘 | 仅当 `CURSORBUDGET_DEBUG=1` 时写入 `~/.config/cursorbudget/debug/` | 否（已 gitignore） |
 
@@ -101,7 +112,7 @@ bash install.sh
 然后在编辑器里执行 **Developer: Reload Window**。  
 `install.sh` 同步到 `~/.cursor/extensions/local.cursorbudget-<version>/`。
 
-状态栏四项：日历（剩余日）· 波形（API%）· 历史（今日）· 图表（日估）。  
+状态栏五项：日历（剩余日）· 波形（API%）· 历史（今日）· 图表（日估）· GPT 周限。  
 设置里搜索 `cursorBudget`；命令面板有「立即刷新 / 打开用量页 / 快捷菜单」。
 
 ---
@@ -127,6 +138,7 @@ CursorBudget/
 │   ├── compute.js
 │   ├── status-json.js     # 桌面 CLI，脱敏快照
 │   ├── cursorApi.js
+│   ├── gptApi.js          # 本机 GPT App 登录态 + 周限额
 │   ├── usageDetails.js
 │   ├── workdays.js
 │   └── holidays.json

@@ -12,4 +12,4 @@ Composition is a single column of accounts. Left alignment for names, right alig
 
 Typography is one family, one temperament. Serif for presence, tabular figures for fairness, weight changes only to distinguish caption from sum. Text is sparse and integrated as a visual instrument — titles, labels, and numbers — never paragraphs. The final artifact must appear meticulously crafted, labored over with care by someone at the absolute top of their field: a daybook worthy of being kept open on a desk, not a gadget panel.
 
-Information lives in proportion. Two peer pools stand as equal ledger rows; the day’s burn sits quieter beneath; the daily judgment closes the page. The viewer should feel measured wealth of attention — not decoration, not apology — the quiet proof that ephemeral spend can be bound, ruled, and understood.
+Information lives in proportion. Cursor’s two peer pools and the GPT weekly limit stand as equal ledger rows; the day’s burn sits quieter beneath; the daily judgment closes the page. The viewer should feel measured wealth of attention — not decoration, not apology — the quiet proof that ephemeral spend can be bound, ruled, and understood.

@@ -141,21 +141,23 @@ ID_WINDOW = 1
 ID_PANEL = 2
 ID_SEP1 = 3
 ID_DASHBOARD = 4
+ID_GPT_DASHBOARD = 11
 ID_REFRESH = 5
 ID_SEP2 = 6
 ID_SETTINGS = 7
 ID_ABOUT = 8
 ID_SEP3 = 9
 ID_QUIT = 10
-# Stable width guide for Ayatana label: API% ※ today%.
-LABEL_GUIDE = "100.00% ※ 100.00%"
+# Stable width guide for Ayatana label: API% ※ today% · G week%.
+LABEL_GUIDE = "100.00% ※ 100.00% · G 100.00%"
 
 
-def panel_label(api, today) -> str:
-    """Top bar text: cumulative API% ※ today API% (no decorative icons)."""
+def panel_label(api, today, gpt=None) -> str:
+    """Top bar text: Cursor API% ※ today API% · G weekly%."""
     api_txt = f"{api:.2f}%" if isinstance(api, (int, float)) else "—"
     today_txt = f"{today:.2f}%" if isinstance(today, (int, float)) else "—"
-    return f"{api_txt} ※ {today_txt}"
+    gpt_txt = f"{gpt:.2f}%" if isinstance(gpt, (int, float)) else "—"
+    return f"{api_txt} ※ {today_txt} · G {gpt_txt}"
 
 
 def _icon_theme_path() -> str:
@@ -189,6 +191,7 @@ class PanelIndicator:
         *,
         on_mode: Callable[[str], None],
         on_dashboard: Callable[[], None],
+        on_gpt_dashboard: Callable[[], None],
         on_refresh: Callable[[], None],
         on_settings: Callable[[], None],
         on_about: Callable[[], None],
@@ -197,6 +200,7 @@ class PanelIndicator:
     ) -> None:
         self._on_mode = on_mode
         self._on_dashboard = on_dashboard
+        self._on_gpt_dashboard = on_gpt_dashboard
         self._on_refresh = on_refresh
         self._on_settings = on_settings
         self._on_about = on_about
@@ -209,7 +213,7 @@ class PanelIndicator:
         self._watch_ids: list[int] = []
         self._registered = False
         self._status = "Passive"
-        self._label = panel_label(None, None)
+        self._label = panel_label(None, None, None)
         self._tone = "ok"
         self._revision = 1
         self._icon_theme = _icon_theme_path()
@@ -252,8 +256,8 @@ class PanelIndicator:
         self._emit_sni("NewStatus", GLib.Variant("(s)", (self._status,)))
         self._emit_props({"Status": GLib.Variant("s", self._status)})
 
-    def set_figures(self, api, today, tone: str = "ok") -> None:
-        label = panel_label(api, today)
+    def set_figures(self, api, today, gpt=None, tone: str = "ok") -> None:
+        label = panel_label(api, today, gpt)
         tone_changed = tone != self._tone
         if label == self._label and not tone_changed:
             return
@@ -410,7 +414,8 @@ class PanelIndicator:
         if item_id in (ID_SEP1, ID_SEP2, ID_SEP3):
             return {"type": GLib.Variant("s", "separator"), "visible": GLib.Variant("b", True)}
         labels = {
-            ID_DASHBOARD: "打开用量页",
+            ID_DASHBOARD: "打开 Cursor 用量页",
+            ID_GPT_DASHBOARD: "打开 GPT 用量页",
             ID_REFRESH: "立即刷新",
             ID_SETTINGS: "设置…",
             ID_ABOUT: f"关于 {__app_name__} {__version__}",
@@ -428,7 +433,7 @@ class PanelIndicator:
         children = [
             _leaf(i, self._item_props(i))
             for i in (
-                ID_WINDOW, ID_PANEL, ID_SEP1, ID_DASHBOARD, ID_REFRESH,
+                ID_WINDOW, ID_PANEL, ID_SEP1, ID_DASHBOARD, ID_GPT_DASHBOARD, ID_REFRESH,
                 ID_SEP2, ID_SETTINGS, ID_ABOUT, ID_SEP3, ID_QUIT,
             )
         ]
@@ -489,6 +494,8 @@ class PanelIndicator:
             self._on_mode("panel")
         elif item_id == ID_DASHBOARD:
             self._on_dashboard()
+        elif item_id == ID_GPT_DASHBOARD:
+            self._on_gpt_dashboard()
         elif item_id == ID_REFRESH:
             self._on_refresh()
         elif item_id == ID_SETTINGS:

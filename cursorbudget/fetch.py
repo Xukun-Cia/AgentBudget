@@ -42,6 +42,17 @@ class Snapshot:
     cycle_end: Optional[str] = None
     workday_label: Optional[str] = None
     usage_source: Optional[str] = None
+    gpt_ok: bool = False
+    gpt_error: Optional[str] = None
+    gpt_plan: Optional[str] = None
+    gpt_percent: Optional[float] = None
+    gpt_reset_at: Optional[str] = None
+    gpt_window_seconds: Optional[float] = None
+    gpt_allowed: Optional[bool] = None
+    gpt_limit_reached: Optional[bool] = None
+    gpt_cycle_start: Optional[str] = None
+    gpt_cycle_end: Optional[str] = None
+    gpt_extras: tuple = ()
 
 
 def lib_dir() -> Path:
@@ -149,7 +160,33 @@ def snapshot_from_dict(data: dict) -> Snapshot:
         cycle_end=data.get("cycleEnd") or None,
         workday_label=data.get("workdayLabel") or None,
         usage_source=data.get("usageSource") or None,
+        gpt_ok=bool(data.get("gptOk")),
+        gpt_error=data.get("gptError") or None,
+        gpt_plan=data.get("gptPlan") or None,
+        gpt_percent=_num(data.get("gptPercent")),
+        gpt_reset_at=data.get("gptResetAt") or None,
+        gpt_window_seconds=_num(data.get("gptWindowSeconds")),
+        gpt_allowed=data.get("gptAllowed") if isinstance(data.get("gptAllowed"), bool) else None,
+        gpt_limit_reached=data.get("gptLimitReached") if isinstance(data.get("gptLimitReached"), bool) else None,
+        gpt_cycle_start=data.get("gptCycleStart") or None,
+        gpt_cycle_end=data.get("gptCycleEnd") or None,
+        gpt_extras=_extras(data.get("gptExtras")),
     )
+
+
+def _extras(value) -> tuple:
+    if not isinstance(value, list):
+        return ()
+    rows = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        label = item.get("label")
+        pct = _num(item.get("percent"))
+        if not label or pct is None:
+            continue
+        rows.append((str(label), pct))
+    return tuple(rows)
 
 
 def fetch_snapshot() -> Snapshot:

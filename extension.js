@@ -1,12 +1,10 @@
 const vscode = require('vscode');
 const { fetchAndCompute } = require('./lib/compute');
-const { buildTooltipLines, fmtPct, formatTodayUsageStatusBar } = require('./lib/usageDetails');
+const { buildTooltipLines, fmtPct, fmtGptPct } = require('./lib/usageDetails');
 const { reloadHolidayData } = require('./lib/workdays');
 
 let statusBarDaily;
 let statusBarUsed;
-let statusBarDays;
-let statusBarToday;
 let statusBarGpt;
 let refreshTimer;
 let cachedData = null;
@@ -42,7 +40,7 @@ function usageIcon(percent, warning, critical) {
 }
 
 function updateStatusBar(data) {
-  const items = [statusBarDays, statusBarUsed, statusBarToday, statusBarDaily, statusBarGpt];
+  const items = [statusBarUsed, statusBarDaily, statusBarGpt];
   if (items.some((item) => !item)) return;
 
   const config = getConfig();
@@ -55,16 +53,14 @@ function updateStatusBar(data) {
 
   if (data.error) {
     const short = data.error.slice(0, 28);
-    statusBarDays.text = `$(warning) ${short}`;
-    statusBarUsed.hide();
-    statusBarToday.hide();
+    statusBarUsed.text = `$(warning) ${short}`;
     statusBarDaily.hide();
-    statusBarDays.tooltip = [data.error, data.fetchError || ''].filter(Boolean).join('\n');
-    statusBarDays.command = 'cursorBudget.quickMenu';
-    statusBarDays.show();
+    statusBarUsed.tooltip = [data.error, data.fetchError || ''].filter(Boolean).join('\n');
+    statusBarUsed.command = 'cursorBudget.quickMenu';
+    statusBarUsed.show();
     const gpt = data.gpt || {};
     if (gpt.ok) {
-      statusBarGpt.text = `$(globe) G ${fmtPct(gpt.percent)}`;
+      statusBarGpt.text = `$(globe) G ${fmtGptPct(gpt.percent)}`;
       statusBarGpt.tooltip = tooltip;
       statusBarGpt.command = 'cursorBudget.quickMenu';
       statusBarGpt.show();
@@ -74,17 +70,13 @@ function updateStatusBar(data) {
     return;
   }
 
-  const { dailyBudget, remainingDays } = data.apiBudget;
   const icon = usageIcon(data.apiPercent, data.warningThreshold, data.criticalThreshold);
 
-  statusBarDays.text = `$(calendar) ${remainingDays.toFixed(2)} day`;
   statusBarUsed.text = `${icon} API ${fmtPct(data.apiPercent)}`;
-  statusBarToday.text = `$(history) ${formatTodayUsageStatusBar(data.todayApiUsage)}`;
-  const dailyLabel = data.apiBudget.isLastStretch ? '剩余' : '日估';
-  statusBarDaily.text = `$(graph) ${dailyLabel} ${dailyBudget.toFixed(2)}%${data.apiBudget.isLastStretch ? '' : '/d'}`;
+  statusBarDaily.text = `$(graph) Cursor ${fmtPct(data.summary && data.summary.autoPercentUsed)}`;
   const gpt = data.gpt || {};
   if (gpt.ok) {
-    statusBarGpt.text = `$(globe) G ${fmtPct(gpt.percent)}`;
+    statusBarGpt.text = `$(globe) G ${fmtGptPct(gpt.percent)}`;
     statusBarGpt.show();
   } else {
     statusBarGpt.text = '$(globe) G —';
@@ -176,14 +168,12 @@ async function refresh() {
     cachedData = await loadSnapshot();
     updateStatusBar(cachedData);
   } catch (err) {
-    if (statusBarDays) {
-      statusBarDays.text = '$(error) Budget Error';
-      statusBarDays.tooltip = String(err);
-      statusBarDays.command = undefined;
-      statusBarDays.show();
+    if (statusBarUsed) {
+      statusBarUsed.text = '$(error) Budget Error';
+      statusBarUsed.tooltip = String(err);
+      statusBarUsed.command = undefined;
+      statusBarUsed.show();
     }
-    if (statusBarUsed) statusBarUsed.hide();
-    if (statusBarToday) statusBarToday.hide();
     if (statusBarDaily) statusBarDaily.hide();
     if (statusBarGpt) statusBarGpt.hide();
   }
@@ -213,11 +203,9 @@ function createStatusBarItem(context, priority) {
 
 function activate(context) {
   // VS Code: higher priority = further left
-  statusBarDays = createStatusBarItem(context, -97);
   statusBarUsed = createStatusBarItem(context, -98);
-  statusBarToday = createStatusBarItem(context, -99);
-  statusBarDaily = createStatusBarItem(context, -100);
-  statusBarGpt = createStatusBarItem(context, -101);
+  statusBarDaily = createStatusBarItem(context, -99);
+  statusBarGpt = createStatusBarItem(context, -100);
 
   context.subscriptions.push(
     vscode.commands.registerCommand('cursorBudget.refresh', async () => {
@@ -252,13 +240,11 @@ function activate(context) {
 
 function deactivate() {
   stopTimer();
-  for (const item of [statusBarDaily, statusBarUsed, statusBarDays, statusBarToday, statusBarGpt]) {
+  for (const item of [statusBarDaily, statusBarUsed, statusBarGpt]) {
     if (item) item.dispose();
   }
   statusBarDaily = null;
   statusBarUsed = null;
-  statusBarDays = null;
-  statusBarToday = null;
   statusBarGpt = null;
 }
 

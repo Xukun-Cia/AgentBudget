@@ -1,8 +1,8 @@
 {
   "name": "cursorbudget",
   "displayName": "CursorBudget",
-  "description": "CursorBudget 可选编辑器配套：在状态栏显示与桌面端相同的日账摘要。主产品是 Ubuntu 桌面小工具（悬浮卡 / 顶栏）。",
-  "version": "1.1.0",
+  "description": "CursorBudget 可选编辑器配套：只显示 Cursor API、Cursor Models 与 GPT 周额度三项核心指标。",
+  "version": "1.2.0",
   "publisher": "local",
   "engines": {
     "vscode": "^1.85.0"

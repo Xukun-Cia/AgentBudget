@@ -1,15 +1,15 @@
-# Ink Ledger
+# Quiet Ledger
 
-A visual philosophy of measured abundance: the quiet authority of a private daybook, where value is held in proportion, not noise.
+CursorBudget 1.2 uses a compact, three-signal hierarchy. Cursor API, Cursor Models, and GPT weekly usage are the only figures visible at rest. Each receives the same vertical rhythm: a plain label, a right-aligned tabular percentage, one line of evidence, and a restrained meter. Nothing else competes for first glance.
 
-Space is the primary craft. Every field sits inside a breathing interval — never pressed against a rule, never crowded into the margin. Horizontal hairlines are pauses, not cages; they arrive only after the eye has finished a thought. Forms are rectangular and calm, edged by a single vertical binding mark that reads as spine rather than chrome. Negative space is meticulously crafted, the product of deep expertise in restraint: what is omitted is as deliberate as what is drawn.
+Secondary accounting belongs behind progressive disclosure. Today’s API spend, the suggested daily pace, plan and cycle metadata, and additional GPT windows appear only after the user selects “展开详情”. The card therefore works as both a calm ambient instrument and a complete ledger without forcing both modes into the same view.
 
-Color is ink, paper, and a single warm metal. Cream ground, pine-soot text, ochre as the only ceremonial accent, vermilion reserved for true alarm. No decorative gradients, no telemetry neon, no second personality fighting the page. Material honesty is master-level execution: the surface should feel like pressed paper under a banker’s lamp, painstakingly tuned so warmth never turns muddy and dark never turns cold.
+The surface is warm graphite or porcelain rather than pure black or white. One muted brass accent carries normal state; a quiet red is reserved for a genuine warning. There are no decorative gradients, left-edge ribbons, neon telemetry colors, card stacks, or ornamental shadows. Hairlines separate phases, not every datum.
 
-Scale follows a strict register. One display figure commands the page; secondary figures share a single, smaller register; captions share one whispering size. Rhythm is vertical and even — label, figure, evidence, pause — repeating with painstaking attention so the reader’s pulse slows. Hierarchy is architectural: time above stock, stock above flow, judgment at the foot. Nothing shouts twice.
+Typography has three jobs. A serif face gives the small product name identity, a CJK sans-serif keeps labels and evidence quiet, and a monospaced figure face makes percentages stable while they update. GPT percentages display only the precision returned by the service—`1%`, not `1.00%`—while Cursor’s genuinely fractional values retain two decimal places.
 
-Composition is a single column of accounts. Left alignment for names, right alignment for magnitudes, a thin meter as the only diagram — never sparkline theatre. Balance is asymmetric but stable: the binding weight on the left answers the numeric weight on the right. Every alignment is the result of countless hours of refinement; master-level execution shows in the silence between rows.
+The collapsed logical canvas is 348 × 430. The expanded canvas grows vertically in place, preserving width and the three primary rows. The GNOME panel and editor companion follow the same hierarchy using `A`, `C`, and `G` as compact labels.
 
-Typography is one family, one temperament. Serif for presence, tabular figures for fairness, weight changes only to distinguish caption from sum. Text is sparse and integrated as a visual instrument — titles, labels, and numbers — never paragraphs. The final artifact must appear meticulously crafted, labored over with care by someone at the absolute top of their field: a daybook worthy of being kept open on a desk, not a gadget panel.
+![Collapsed dark card](cursorbudget-v1.2-preview.png)
 
-Information lives in proportion. Cursor’s two peer pools and the GPT weekly limit stand as equal ledger rows; the day’s burn sits quieter beneath; the daily judgment closes the page. The viewer should feel measured wealth of attention — not decoration, not apology — the quiet proof that ephemeral spend can be bound, ruled, and understood.
+![Expanded dark card](cursorbudget-v1.2-details.png)

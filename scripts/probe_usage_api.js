@@ -4,15 +4,17 @@
  * Writes only under ~/.config/cursorbudget/debug/ — never into the repo.
  * Does not print tokens, emails, or full response bodies to stdout.
  */
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 const https = require('https');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { redactPrivate, secureWriteJson } = require('../lib/privacy');
 
 function debugDir() {
   const dir = path.join(os.homedir(), '.config', 'cursorbudget', 'debug');
-  fs.mkdirSync(dir, { recursive: true });
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  try { fs.chmodSync(dir, 0o700); } catch (_) {}
   return dir;
 }
 
@@ -29,7 +31,7 @@ payload = json.loads(base64.urlsafe_b64decode(raw.split('.')[1] + '=='))
 uid = payload['sub'].split('|')[1]
 print(json.dumps({"userId": uid, "jwt": raw, "session": uid + "%3A%3A" + raw}))
 `;
-  return JSON.parse(execSync(`python3 -c ${JSON.stringify(script)}`, { encoding: 'utf-8' }));
+  return JSON.parse(execFileSync('python3', ['-c', script], { encoding: 'utf-8' }));
 }
 
 function req(url, headers, method = 'GET', body = null) {
@@ -102,7 +104,7 @@ async function main() {
       };
       const r = await req(url, h);
       if (r.status === 200 && r.body && typeof r.body === 'object') {
-        out.push({ url, authIdx: i, status: r.status, body: r.body });
+        out.push(redactPrivate({ url, authIdx: i, status: r.status, body: r.body }, ''));
         console.log('OK', url.replace(userId, '<redacted>'), 'auth', i, 'keys', bodyKeys(r.body).join(','));
         break;
       }
@@ -113,7 +115,7 @@ async function main() {
   }
 
   const dest = path.join(debugDir(), 'probe-results.json');
-  fs.writeFileSync(dest, JSON.stringify(out, null, 2));
+  secureWriteJson(dest, out);
   console.log('\nWrote', out.length, 'successful endpoints to', dest);
 }
 

@@ -52,6 +52,8 @@ class Snapshot:
     gpt_limit_reached: Optional[bool] = None
     gpt_cycle_start: Optional[str] = None
     gpt_cycle_end: Optional[str] = None
+    gpt_source: Optional[str] = None
+    gpt_windows: tuple = ()
     gpt_extras: tuple = ()
 
 
@@ -170,6 +172,8 @@ def snapshot_from_dict(data: dict) -> Snapshot:
         gpt_limit_reached=data.get("gptLimitReached") if isinstance(data.get("gptLimitReached"), bool) else None,
         gpt_cycle_start=data.get("gptCycleStart") or None,
         gpt_cycle_end=data.get("gptCycleEnd") or None,
+        gpt_source=data.get("gptSource") or None,
+        gpt_windows=_gpt_rows(data.get("gptWindows")),
         gpt_extras=_extras(data.get("gptExtras")),
     )
 
@@ -186,6 +190,34 @@ def _extras(value) -> tuple:
         if not label or pct is None:
             continue
         rows.append((str(label), pct))
+    return tuple(rows)
+
+
+def _gpt_rows(value) -> tuple:
+    if not isinstance(value, list):
+        return ()
+    rows = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        label = item.get("label")
+        pct = _num(item.get("percent"))
+        if not label or pct is None:
+            continue
+        rows.append({
+            "label": str(label),
+            "group": str(item.get("group") or ""),
+            "kind": str(item.get("kind") or ""),
+            "percent": pct,
+            "reset_at": item.get("resetAt") or None,
+            "window_seconds": _num(item.get("windowSeconds")),
+            "limit_reached": (
+                item.get("limitReached")
+                if isinstance(item.get("limitReached"), bool)
+                else None
+            ),
+            "is_main": bool(item.get("isMain")),
+        })
     return tuple(rows)
 
 

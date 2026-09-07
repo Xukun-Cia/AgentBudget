@@ -148,16 +148,19 @@ ID_SETTINGS = 7
 ID_ABOUT = 8
 ID_SEP3 = 9
 ID_QUIT = 10
-# Stable width guide for Ayatana label: API% ※ today% · G week%.
-LABEL_GUIDE = "100.00% ※ 100.00% · G 100.00%"
+# Stable width guide for the three core quota signals.
+LABEL_GUIDE = "A 100.00% · C 100.00% · G 100%"
 
 
-def panel_label(api, today, gpt=None) -> str:
-    """Top bar text: Cursor API% ※ today API% · G weekly%."""
+def panel_label(api, cursor, gpt=None) -> str:
+    """Top bar text: Cursor API, Cursor Models, GPT weekly quota."""
     api_txt = f"{api:.2f}%" if isinstance(api, (int, float)) else "—"
-    today_txt = f"{today:.2f}%" if isinstance(today, (int, float)) else "—"
-    gpt_txt = f"{gpt:.2f}%" if isinstance(gpt, (int, float)) else "—"
-    return f"{api_txt} ※ {today_txt} · G {gpt_txt}"
+    cursor_txt = f"{cursor:.2f}%" if isinstance(cursor, (int, float)) else "—"
+    if isinstance(gpt, (int, float)):
+        gpt_txt = f"{gpt:.0f}%" if abs(gpt - round(gpt)) < 1e-9 else f"{gpt:.2f}".rstrip("0") + "%"
+    else:
+        gpt_txt = "—"
+    return f"A {api_txt} · C {cursor_txt} · G {gpt_txt}"
 
 
 def _icon_theme_path() -> str:
@@ -256,8 +259,8 @@ class PanelIndicator:
         self._emit_sni("NewStatus", GLib.Variant("(s)", (self._status,)))
         self._emit_props({"Status": GLib.Variant("s", self._status)})
 
-    def set_figures(self, api, today, gpt=None, tone: str = "ok") -> None:
-        label = panel_label(api, today, gpt)
+    def set_figures(self, api, cursor, gpt=None, tone: str = "ok") -> None:
+        label = panel_label(api, cursor, gpt)
         tone_changed = tone != self._tone
         if label == self._label and not tone_changed:
             return

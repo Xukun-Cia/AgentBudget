@@ -8,6 +8,8 @@ ARCH="all"
 PKG_DIR="${ROOT}/dist/${NAME}_${VERSION}_${ARCH}"
 DEB_PATH="${ROOT}/dist/${NAME}_${VERSION}_${ARCH}.deb"
 
+"${ROOT}/scripts/check-privacy.sh"
+
 rm -rf "${PKG_DIR}" "${DEB_PATH}"
 mkdir -p \
   "${PKG_DIR}/DEBIAN" \
@@ -22,6 +24,9 @@ mkdir -p \
 python3 "${ROOT}/scripts/render_icon.py" \
   --out "${PKG_DIR}/usr/share/icons/hicolor" \
   --pixmap "${PKG_DIR}/usr/share/pixmaps/cursorbudget.png"
+
+find "${PKG_DIR}" -type d -exec chmod 0755 {} +
+find "${PKG_DIR}/usr/share/icons" "${PKG_DIR}/usr/share/pixmaps" -type f -exec chmod 0644 {} +
 
 install -m 0755 "${ROOT}/bin/cursorbudget" "${PKG_DIR}/usr/bin/cursorbudget"
 install -m 0644 "${ROOT}/cursorbudget/"*.py "${PKG_DIR}/usr/lib/python3/dist-packages/cursorbudget/"
@@ -39,10 +44,10 @@ Priority: optional
 Architecture: ${ARCH}
 Depends: python3 (>= 3.8), python3-gi, python3-gi-cairo, gir1.2-gtk-3.0, python3-cairo, nodejs
 Maintainer: Xukun-Cia <noreply@users.noreply.github.com>
-Description: Local Cursor and GPT subscription ledger for Ubuntu
- CursorBudget is a small Ubuntu desktop tool: an Ink Ledger floating
- card or a compact GNOME top-bar readout for Cursor and GPT
- subscriptions. Login state and usage stay on this machine.
+Description: Local Cursor and GPT quota monitor for Ubuntu
+ CursorBudget shows Cursor API, Cursor Models, and GPT weekly quota in
+ a compact floating card or GNOME top-bar readout. Login state and
+ usage stay on this machine.
 EOF
 
 cat > "${PKG_DIR}/DEBIAN/postinst" <<'EOF'

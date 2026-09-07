@@ -10,9 +10,11 @@ from typing import Dict, Tuple
 CONFIG_DIR = Path.home() / ".config" / "cursorbudget"
 CONFIG_PATH = CONFIG_DIR / "config.json"
 
-# Logical design size — Ink Ledger daybook proportions.
-BASE_W = 336
-BASE_H = 700
+# Logical design sizes. The default card stays deliberately compact; secondary
+# accounting details are revealed in place on demand.
+BASE_W = 348
+BASE_H = 430
+DETAIL_H = 694
 
 DISPLAY_MODES = ("window", "panel")
 DISPLAY_MODE_LABELS = {
@@ -37,22 +39,22 @@ ThemeColors = Tuple[Tuple[float, float, float], ...]
 
 THEMES: Dict[str, ThemeColors] = {
     "light": (
-        (0.968, 0.948, 0.915),  # 宣纸
-        (0.125, 0.108, 0.095),  # 松烟
-        (0.40, 0.34, 0.28),
-        (0.82, 0.76, 0.68),
-        (0.55, 0.38, 0.16),     # 赭
-        (0.72, 0.22, 0.18),     # 朱砂
-        (0.28, 0.40, 0.33),     # 青苔
+        (0.965, 0.956, 0.936),  # warm porcelain
+        (0.105, 0.100, 0.090),  # charcoal
+        (0.405, 0.390, 0.355),
+        (0.820, 0.800, 0.755),
+        (0.595, 0.435, 0.205),  # restrained brass
+        (0.650, 0.255, 0.210),  # muted alert
+        (0.595, 0.435, 0.205),  # one-accent system
     ),
     "dark": (
-        (0.100, 0.086, 0.074),  # 砚
-        (0.93, 0.90, 0.84),
-        (0.62, 0.56, 0.50),
-        (0.28, 0.24, 0.20),
-        (0.84, 0.64, 0.30),
-        (0.86, 0.38, 0.30),
-        (0.48, 0.68, 0.52),
+        (0.075, 0.073, 0.068),  # warm graphite
+        (0.945, 0.928, 0.890),
+        (0.625, 0.600, 0.545),
+        (0.235, 0.225, 0.205),
+        (0.805, 0.610, 0.305),
+        (0.825, 0.390, 0.320),
+        (0.805, 0.610, 0.305),
     ),
 }
 
@@ -102,9 +104,9 @@ class Settings:
     def pixel_scale(self) -> float:
         return self.size_factor * self.ui_scale
 
-    def window_size(self) -> Tuple[int, int]:
+    def window_size(self, logical_height: int = BASE_H) -> Tuple[int, int]:
         s = self.pixel_scale
-        return max(240, int(round(BASE_W * s))), max(360, int(round(BASE_H * s)))
+        return max(240, int(round(BASE_W * s))), max(360, int(round(logical_height * s)))
 
     @property
     def refresh_ms(self) -> int:
@@ -117,6 +119,11 @@ class Settings:
 def load_settings() -> Settings:
     if not CONFIG_PATH.is_file():
         return Settings().clamp()
+    try:
+        CONFIG_DIR.chmod(0o700)
+        CONFIG_PATH.chmod(0o600)
+    except OSError:
+        pass
     try:
         data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
         return Settings(
@@ -135,8 +142,16 @@ def load_settings() -> Settings:
 
 def save_settings(settings: Settings) -> None:
     settings.clamp()
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
+    try:
+        CONFIG_DIR.chmod(0o700)
+    except OSError:
+        pass
     CONFIG_PATH.write_text(
         json.dumps(asdict(settings), indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
+    try:
+        CONFIG_PATH.chmod(0o600)
+    except OSError:
+        pass

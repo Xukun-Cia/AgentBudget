@@ -1,4 +1,4 @@
-probe-results.json
+**/probe-results.json
 .cursor/
 *.log
 .DS_Store
@@ -6,7 +6,9 @@ dist/
 *.deb
 budget-logs/
 **/api-response.json
-.env
+**/auth.json
+.env*
+**/.env*
 *.vscdb
 *.vscdb-wal
 *.vscdb-shm

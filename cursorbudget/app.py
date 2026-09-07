@@ -22,6 +22,7 @@ from .indicator import PanelIndicator
 from .settings import (
     BASE_H,
     BASE_W,
+    DETAIL_H,
     DISPLAY_MODE_LABELS,
     DISPLAY_MODES,
     REFRESH_MAX,
@@ -39,18 +40,6 @@ DASHBOARD_URL = "https://cursor.com/dashboard/usage"
 GPT_DASHBOARD_URL = "https://chatgpt.com/#settings/Usage"
 
 
-def _fmt_window(seconds: Optional[float]) -> str:
-    if seconds is None or not math.isfinite(seconds) or seconds <= 0:
-        return "限额窗"
-    if seconds >= 86400 and abs(seconds % 86400) < 1:
-        days = int(round(seconds / 86400))
-        return f"{days}日窗"
-    if seconds >= 3600:
-        hours = int(round(seconds / 3600))
-        return f"{hours}时窗"
-    return f"{int(round(seconds))}秒窗"
-
-
 def _rgba(cr: cairo.Context, rgb, a: float = 1.0) -> None:
     cr.set_source_rgba(rgb[0], rgb[1], rgb[2], a)
 
@@ -59,6 +48,15 @@ def _fmt_pct(value: Optional[float]) -> str:
     if value is None or not math.isfinite(value):
         return "—"
     return f"{value:.2f}%"
+
+
+def _fmt_gpt_pct(value: Optional[float]) -> str:
+    """Do not invent decimal precision the quota service did not return."""
+    if value is None or not math.isfinite(value):
+        return "—"
+    if abs(value - round(value)) < 1e-9:
+        return f"{round(value):.0f}%"
+    return f"{value:.2f}".rstrip("0").rstrip(".") + "%"
 
 
 def _fmt_days(value: Optional[float]) -> str:
@@ -90,24 +88,49 @@ def _fmt_when(value: Optional[str]) -> str:
         return str(value)[:16]
 
 
-# Ink Ledger: one serif family only (CJK-capable).
-try:
-    import subprocess as _subprocess
+def _match_font(query: str, fallback: str) -> str:
+    try:
+        import subprocess as _subprocess
+        matched = _subprocess.check_output(
+            ["fc-match", "-f", "%{family}", query],
+            text=True,
+            timeout=2,
+        ).strip()
+        return matched.split(",")[0].strip() or fallback
+    except Exception:
+        return fallback
 
-    _matched = _subprocess.check_output(
-        ["fc-match", "-f", "%{family}", "Noto Serif CJK SC:lang=zh-cn"],
-        text=True,
-        timeout=2,
-    ).strip()
-    _UI_FONT = _matched.split(",")[0].strip() or "Noto Serif CJK SC"
-except Exception:
-    _UI_FONT = "Noto Serif CJK SC"
+
+_BODY_FONT = _match_font("Noto Sans CJK SC:lang=zh-cn", "Sans")
+_DISPLAY_FONT = _match_font("Noto Serif CJK SC:lang=zh-cn", "Serif")
+_FIGURE_FONT = _match_font("DejaVu Sans Mono", "Monospace")
 
 
-def _set_font(cr: cairo.Context, *, bold: bool = False, size: float = 11) -> None:
+def _set_font(
+    cr: cairo.Context,
+    *,
+    bold: bool = False,
+    size: float = 11,
+    family: str = "body",
+) -> None:
     weight = cairo.FONT_WEIGHT_BOLD if bold else cairo.FONT_WEIGHT_NORMAL
-    cr.select_font_face(_UI_FONT, cairo.FONT_SLANT_NORMAL, weight)
+    font = {
+        "body": _BODY_FONT,
+        "display": _DISPLAY_FONT,
+        "figure": _FIGURE_FONT,
+    }.get(family, _BODY_FONT)
+    cr.select_font_face(font, cairo.FONT_SLANT_NORMAL, weight)
     cr.set_font_size(size)
+
+
+def _rounded_rect(cr: cairo.Context, x: float, y: float, w: float, h: float, r: float) -> None:
+    r = max(0.0, min(r, w / 2, h / 2))
+    cr.new_sub_path()
+    cr.arc(x + w - r, y + r, r, -math.pi / 2, 0)
+    cr.arc(x + w - r, y + h - r, r, 0, math.pi / 2)
+    cr.arc(x + r, y + h - r, r, math.pi / 2, math.pi)
+    cr.arc(x + r, y + r, r, math.pi, math.pi * 1.5)
+    cr.close_path()
 
 
 def _clock_now() -> str:
@@ -204,7 +227,7 @@ class SettingsDialog(Gtk.Dialog):
         grid.attach(self.crit_spin, 1, 5, 1, 1)
 
         hint = Gtk.Label(
-            label="顶栏：API累计% ※ 今日API% · G 周限%。完整日账在悬浮卡。",
+            label="顶栏只保留 Cursor API、Cursor Models 与 GPT 周额度。完整明细在悬浮卡展开查看。",
             xalign=0,
         )
         hint.set_line_wrap(True)
@@ -278,6 +301,7 @@ class LedgerWindow(Gtk.Window):
     def __init__(self, app: "LedgerApp") -> None:
         super().__init__(title=__app_name__)
         self.app = app
+        self.details_expanded = False
         win_w, win_h = app.settings.window_size()
 
         self.set_default_size(win_w, win_h)
@@ -319,7 +343,7 @@ class LedgerWindow(Gtk.Window):
         self.menu = _build_menu(app, show_always_on_top=True)
 
     def apply_geometry(self) -> None:
-        win_w, win_h = self.app.settings.window_size()
+        win_w, win_h = self.app.settings.window_size(self.logical_height)
         self.drawing.set_size_request(win_w, win_h)
         self.resize(win_w, win_h)
         self.set_size_request(win_w, win_h)
@@ -330,8 +354,17 @@ class LedgerWindow(Gtk.Window):
         if screen is None:
             return
         geo = screen.get_monitor_geometry(screen.get_primary_monitor())
-        ww, hh = self.app.settings.window_size()
+        ww, hh = self.app.settings.window_size(self.logical_height)
         self.move(geo.x + geo.width - ww - 36, geo.y + geo.height - hh - 80)
+
+    @property
+    def logical_height(self) -> int:
+        return DETAIL_H if self.details_expanded else BASE_H
+
+    def toggle_details(self) -> None:
+        self.details_expanded = not self.details_expanded
+        self.apply_geometry()
+        self.redraw()
 
     def redraw(self) -> None:
         self.drawing.queue_draw()
@@ -342,8 +375,13 @@ class LedgerWindow(Gtk.Window):
             return True
         if event.button == 1:
             alloc = self.drawing.get_allocation()
-            if event.x >= alloc.width - 28 and event.y <= 26:
+            logical_x = event.x * BASE_W / max(1, alloc.width)
+            logical_y = event.y * self.logical_height / max(1, alloc.height)
+            if logical_x >= BASE_W - 36 and logical_y <= 48:
                 self.app.quit()
+                return True
+            if 346 <= logical_y <= 404:
+                self.toggle_details()
                 return True
             self._dragging = True
             self._drag_ox = int(event.x_root)
@@ -370,221 +408,199 @@ class LedgerWindow(Gtk.Window):
     def _on_draw(self, _widget, cr: cairo.Context) -> bool:
         alloc = self.drawing.get_allocation()
         cr.save()
-        cr.scale(alloc.width / BASE_W, alloc.height / BASE_H)
+        cr.scale(alloc.width / BASE_W, alloc.height / self.logical_height)
         self._paint_logical(cr)
         cr.restore()
         return False
 
     def _paint_logical(self, cr: cairo.Context) -> None:
-        """Ink Ledger card: peer pools, clear air under rules, one serif family."""
+        """Compact three-signal view with progressive disclosure."""
         snap = self.app.snap
-        w, h = BASE_W, BASE_H
-        paper, ink, ink_soft, rule, ochre, cinnabar, moss = self.app.settings.colors()
-        tone = self.app.tone()
-        api_accent = cinnabar if tone == "critical" else ochre if tone == "warn" else moss
-
-        pad_l = 24
-        pad_r = w - 22
-        content_w = pad_r - pad_l
+        w, h = BASE_W, self.logical_height
+        paper, ink, ink_soft, rule, accent, alert, _unused = self.app.settings.colors()
 
         _rgba(cr, paper)
         cr.rectangle(0, 0, w, h)
         cr.fill()
-
-        _rgba(cr, ochre)
-        cr.rectangle(0, 0, 8, h)
-        cr.fill()
-
-        _rgba(cr, ink, 0.12)
+        _rgba(cr, ink, 0.16)
         cr.set_line_width(1.0)
-        cr.rectangle(8.5, 0.5, w - 9, h - 1)
+        cr.rectangle(0.5, 0.5, w - 1, h - 1)
         cr.stroke()
 
-        paint_mark(cr, pad_l + 10, 24, 10, tone=tone)
-        _set_font(cr, bold=False, size=12)
-        _rgba(cr, ochre)
-        cr.move_to(pad_l + 28, 28)
+        tone = self.app.tone()
+        paint_mark(cr, 25, 25, 8, tone=tone)
+        _set_font(cr, bold=True, size=13, family="display")
+        _rgba(cr, ink)
+        cr.move_to(42, 30)
         cr.show_text("CursorBudget")
-        _set_font(cr, bold=False, size=14)
-        _rgba(cr, ink_soft, 0.55)
-        tw = cr.text_extents("×").width
-        cr.move_to(pad_r - tw, 27)
-        cr.show_text("×")
 
-        y = 42
-        self._rule(cr, pad_l, y, pad_r, rule)
+        updated = getattr(self.app, "last_updated", None) or _clock_now()[:5]
+        status = "刷新中" if self.app.fetching else f"更新 {updated}"
+        _set_font(cr, size=9)
+        _rgba(cr, ink_soft)
+        sw = cr.text_extents(status).width
+        cr.move_to(w - 48 - sw, 29)
+        cr.show_text(status)
+        _set_font(cr, size=16)
+        close = "×"
+        cw = cr.text_extents(close).width
+        cr.move_to(w - 19 - cw, 30)
+        cr.show_text(close)
+        self._rule(cr, 20, 50, w - 20, rule)
 
         if snap is None:
-            _set_font(cr, bold=False, size=13)
-            _rgba(cr, ink_soft)
-            cr.move_to(pad_l, 88)
-            cr.show_text("正在翻开今日账本…")
+            self._paint_empty(cr, ink, ink_soft, rule, accent)
             return
 
-        if not snap.ok:
-            _set_font(cr, bold=False, size=13)
-            self._wrapped_text(cr, snap.error or "无法读取用量", pad_l, 80, content_w, ink=cinnabar)
-            if snap.fetch_error:
-                self._wrapped_text(cr, snap.fetch_error, pad_l, 128, content_w, ink=ink_soft)
-            if snap.gpt_ok:
-                y = self._pool_section(
-                    cr, pad_l, pad_r, 190, content_w,
-                    "GPT 周限", _fmt_pct(snap.gpt_percent),
-                    "  ·  ".join(
-                        part for part in (
-                            snap.gpt_plan or "GPT",
-                            _fmt_window(snap.gpt_window_seconds),
-                            f"重置  {_fmt_when(snap.gpt_reset_at)}" if snap.gpt_reset_at else "",
-                        ) if part
-                    ),
-                    snap.gpt_percent, ochre, ink, ink_soft, rule,
-                )
-            return
-
-        # Hero — remaining workdays
-        y = 68
-        _set_font(cr, bold=False, size=11)
-        _rgba(cr, ink_soft)
-        cr.move_to(pad_l, y)
-        cr.show_text("剩余工作日")
-        _set_font(cr, bold=True, size=44)
-        _rgba(cr, ink)
-        cr.move_to(pad_l, y + 48)
-        cr.show_text(_fmt_days(snap.remaining_days))
-        _set_font(cr, bold=False, size=12)
-        _rgba(cr, ochre)
-        cr.move_to(pad_l, y + 72)
-        cr.show_text(f"重置  {_fmt_when(snap.cycle_end)}")
-        y = y + 90
-
-        # Peer pool: API
-        api_sub = f"{_fmt_usd(snap.api_used_cents)}  /  {_fmt_usd(snap.api_limit_cents)}"
-        y = self._pool_section(
-            cr, pad_l, pad_r, y, content_w,
-            "API 池", _fmt_pct(snap.api_percent), api_sub,
-            snap.api_percent, api_accent, ink, ink_soft, rule,
-        )
-
-        # Peer pool: Cursor Models
-        cursor_sub = f"{_fmt_usd(snap.auto_used_cents)}  /  {_fmt_usd(snap.auto_limit_cents)}"
-        y = self._pool_section(
-            cr, pad_l, pad_r, y, content_w,
-            "Cursor 池", _fmt_pct(snap.auto_percent), cursor_sub,
-            snap.auto_percent, ochre, ink, ink_soft, rule,
-        )
-
-        gpt_accent = cinnabar if snap.gpt_limit_reached else ochre
+        api_sub = f"{_fmt_usd(snap.api_used_cents)} / {_fmt_usd(snap.api_limit_cents)}"
+        cursor_sub = f"{_fmt_usd(snap.auto_used_cents)} / {_fmt_usd(snap.auto_limit_cents)}"
         if snap.gpt_ok:
-            gpt_bits = [snap.gpt_plan or "GPT"]
-            gpt_bits.append(_fmt_window(snap.gpt_window_seconds))
-            if snap.gpt_reset_at:
-                gpt_bits.append(f"重置  {_fmt_when(snap.gpt_reset_at)}")
-            y = self._pool_section(
-                cr, pad_l, pad_r, y, content_w,
-                "GPT 周限", _fmt_pct(snap.gpt_percent), "  ·  ".join(gpt_bits),
-                snap.gpt_percent, gpt_accent, ink, ink_soft, rule,
+            gpt_sub = " · ".join(
+                part for part in (
+                    snap.gpt_plan or "GPT",
+                    f"重置 {_fmt_when(snap.gpt_reset_at)}" if snap.gpt_reset_at else "",
+                ) if part
             )
-            busy_extras = [(name, pct) for name, pct in snap.gpt_extras if pct >= 0.1]
-            if busy_extras:
-                _set_font(cr, bold=False, size=11)
-                _rgba(cr, ink_soft)
-                extra = "  ·  ".join(f"{name} {_fmt_pct(pct)}" for name, pct in busy_extras)
-                cr.move_to(pad_l, y - 8)
-                cr.show_text(extra)
-                y += 10
         else:
-            self._rule(cr, pad_l, y, pad_r, rule)
-            base = y + 32
-            _set_font(cr, bold=False, size=11)
-            _rgba(cr, ink_soft)
-            cr.move_to(pad_l, base)
-            cr.show_text("GPT 周限")
-            _set_font(cr, bold=True, size=22)
-            _rgba(cr, ink)
-            tw = cr.text_extents("—").width
-            cr.move_to(pad_r - tw, base)
-            cr.show_text("—")
-            _set_font(cr, bold=False, size=12)
-            _rgba(cr, ink_soft)
-            cr.move_to(pad_l, base + 24)
-            cr.show_text(snap.gpt_error or "尚未读到 GPT 登录态")
-            y = base + 24 + 28
+            gpt_sub = snap.gpt_error or "未读取到 GPT 登录态"
 
-        # Today — quieter, no meter
-        self._rule(cr, pad_l, y, pad_r, rule)
-        base = y + 30
-        today_sub = _fmt_usd(snap.today_cents)
-        if snap.today_events is not None:
-            today_sub = f"{today_sub}  ·  {snap.today_events} 笔"
-        if snap.today_truncated:
-            today_sub += "  ·  未拉全"
-        _set_font(cr, bold=False, size=11)
-        _rgba(cr, ink_soft)
-        cr.move_to(pad_l, base)
-        cr.show_text("今日 API")
-        _set_font(cr, bold=True, size=22)
+        api_color = alert if tone in ("warn", "critical") else accent
+        self._metric_row(cr, 64, "Cursor API", _fmt_pct(snap.api_percent), api_sub,
+                         snap.api_percent, api_color, ink, ink_soft, rule)
+        self._metric_row(cr, 157, "Cursor Models", _fmt_pct(snap.auto_percent), cursor_sub,
+                         snap.auto_percent, accent, ink, ink_soft, rule)
+        self._metric_row(cr, 250, "GPT 周额度", _fmt_gpt_pct(snap.gpt_percent), gpt_sub,
+                         snap.gpt_percent, alert if snap.gpt_limit_reached else accent,
+                         ink, ink_soft, rule)
+
+        self._rule(cr, 20, 346, w - 20, rule)
+        _set_font(cr, bold=True, size=11)
         _rgba(cr, ink)
-        pct = _fmt_pct(snap.today_percent)
-        tw = cr.text_extents(pct).width
-        cr.move_to(pad_r - tw, base)
-        cr.show_text(pct)
-        _set_font(cr, bold=False, size=12)
+        cr.move_to(22, 382)
+        cr.show_text("收起详情" if self.details_expanded else "展开详情")
+        summary = f"今日 {_fmt_pct(snap.today_percent)} · 剩余 {_fmt_days(snap.remaining_days)} 工作日"
+        _set_font(cr, size=9)
         _rgba(cr, ink_soft)
-        cr.move_to(pad_l, base + 24)
-        cr.show_text(today_sub)
-        hint = "9:00 → 9:00"
-        hw = cr.text_extents(hint).width
-        cr.move_to(pad_r - hw, base + 24)
-        cr.show_text(hint)
-        y = base + 24 + 28
+        summary_w = cr.text_extents(summary).width
+        cr.move_to(w - 38 - summary_w, 381)
+        cr.show_text(summary)
+        self._chevron(cr, w - 21, 376, up=self.details_expanded, color=ink_soft)
 
-        # Judgment footer
-        self._rule(cr, pad_l, y, pad_r, rule)
-        base = y + 32
-        daily_label = "剩余额度" if snap.is_last_stretch else "日估"
+        if self.details_expanded:
+            self._paint_details(cr, snap, ink, ink_soft, rule, accent)
+
+    def _paint_empty(self, cr, ink, ink_soft, rule, accent) -> None:
+        for top in (64, 157, 250):
+            _rgba(cr, rule, 0.75)
+            _rounded_rect(cr, 22, top + 58, BASE_W - 44, 6, 3)
+            cr.fill()
+        _set_font(cr, bold=True, size=20, family="display")
+        _rgba(cr, ink)
+        cr.move_to(22, 101)
+        cr.show_text("正在读取用量")
+        _set_font(cr, size=11)
+        _rgba(cr, ink_soft)
+        cr.move_to(22, 126)
+        cr.show_text("数据只在本机整理")
+        _rgba(cr, accent)
+        _rounded_rect(cr, 22, 148, 74, 3, 1.5)
+        cr.fill()
+
+    def _metric_row(
+        self, cr, top, label, value, sub, pct, color, ink, ink_soft, rule,
+    ) -> None:
+        _set_font(cr, bold=True, size=11)
+        _rgba(cr, ink)
+        cr.move_to(22, top + 18)
+        cr.show_text(label)
+        _set_font(cr, bold=True, size=24, family="figure")
+        value_w = cr.text_extents(value).width
+        cr.move_to(BASE_W - 22 - value_w, top + 28)
+        cr.show_text(value)
+        _set_font(cr, size=10)
+        _rgba(cr, ink_soft)
+        cr.move_to(22, top + 46)
+        cr.show_text(str(sub)[:48])
+
+        bar_x, bar_y, bar_w, bar_h = 22, top + 62, BASE_W - 44, 6
+        _rgba(cr, rule)
+        _rounded_rect(cr, bar_x, bar_y, bar_w, bar_h, bar_h / 2)
+        cr.fill()
+        if pct is not None and math.isfinite(pct) and pct > 0:
+            fill = max(bar_h, min(bar_w, pct / 100.0 * bar_w))
+            _rgba(cr, color)
+            _rounded_rect(cr, bar_x, bar_y, fill, bar_h, bar_h / 2)
+            cr.fill()
+
+    def _paint_details(self, cr, snap, ink, ink_soft, rule, accent) -> None:
+        self._rule(cr, 20, 404, BASE_W - 20, rule)
+        _set_font(cr, bold=True, size=10)
+        _rgba(cr, accent)
+        cr.move_to(22, 431)
+        cr.show_text("本期概览")
+
+        today = _fmt_usd(snap.today_cents)
+        if snap.today_events is not None:
+            today += f" · {snap.today_events} 笔"
+        if snap.today_truncated:
+            today += " · 未拉全"
+        daily_label = "剩余额度" if snap.is_last_stretch else "建议日用"
         daily_value = _fmt_pct(snap.daily_budget)
         if not snap.is_last_stretch and snap.daily_budget is not None:
-            daily_value = f"{snap.daily_budget:.2f}%/d"
-        _set_font(cr, bold=False, size=13)
-        _rgba(cr, ink_soft)
-        cr.move_to(pad_l, base)
-        cr.show_text(daily_label)
-        _set_font(cr, bold=True, size=16)
-        _rgba(cr, ink)
-        tw = cr.text_extents(daily_value).width
-        cr.move_to(pad_r - tw, base)
-        cr.show_text(daily_value)
-
-        _set_font(cr, bold=False, size=12)
-        _rgba(cr, ink_soft)
+            daily_value = f"{snap.daily_budget:.2f}% / 天"
         plan = snap.membership_type or "—"
         if snap.included_limit_cents is not None:
-            plan = (
-                f"套餐  {snap.membership_type}  "
-                f"{_fmt_usd(snap.included_used_cents)} / {_fmt_usd(snap.included_limit_cents)}"
-            )
+            plan += f" · {_fmt_usd(snap.included_used_cents)} / {_fmt_usd(snap.included_limit_cents)}"
+
+        self._detail_line(cr, 459, "今日 API", f"{_fmt_pct(snap.today_percent)} · {today}", ink, ink_soft)
+        self._detail_line(cr, 487, daily_label, daily_value, ink, ink_soft)
+        self._detail_line(cr, 515, "Cursor 套餐", plan, ink, ink_soft)
+        cycle = f"{_fmt_when(snap.cycle_start)} → {_fmt_when(snap.cycle_end)}"
+        self._detail_line(cr, 543, "Cursor 周期", cycle, ink, ink_soft)
+
+        extras = [row for row in snap.gpt_windows if not row.get("is_main")]
+        _set_font(cr, bold=True, size=10)
+        _rgba(cr, accent)
+        cr.move_to(22, 578)
+        cr.show_text("其他 GPT 限额")
+        if extras:
+            for index, row in enumerate(extras[:3]):
+                value = f"{_fmt_gpt_pct(row.get('percent'))} · 重置 {_fmt_when(row.get('reset_at'))}"
+                self._detail_line(
+                    cr, 606 + index * 27, str(row.get("label") or "额外额度"),
+                    value, ink, ink_soft,
+                )
         else:
-            plan = f"套餐  {snap.membership_type}"
-        cr.move_to(pad_l, base + 26)
-        cr.show_text(plan)
-        if snap.bonus_cents:
-            bonus = f"bonus {_fmt_usd(snap.bonus_cents)}"
-            bw = cr.text_extents(bonus).width
-            cr.move_to(pad_r - bw, base + 26)
-            cr.show_text(bonus)
+            _set_font(cr, size=10)
+            _rgba(cr, ink_soft)
+            cr.move_to(22, 606)
+            cr.show_text("当前账户未返回其他额度组")
 
-        cr.move_to(pad_l, base + 50)
-        cr.show_text(f"周期  {_fmt_when(snap.cycle_start)}  →  {_fmt_when(snap.cycle_end)}")
+    def _detail_line(self, cr, y, label, value, ink, ink_soft) -> None:
+        _set_font(cr, size=10)
+        _rgba(cr, ink_soft)
+        cr.move_to(22, y)
+        cr.show_text(label)
+        _set_font(cr, bold=True, size=10)
+        _rgba(cr, ink)
+        value = str(value)
+        width = cr.text_extents(value).width
+        cr.move_to(BASE_W - 22 - width, y)
+        cr.show_text(value)
 
-        clock = _clock_now()
-        footer = snap.workday_label or clock
-        if snap.workday_label and "（" in snap.workday_label:
-            footer = clock + snap.workday_label[snap.workday_label.find("（"):]
-        if self.app.fetching:
-            footer = f"{footer}  ·  刷新中"
-        # Keep a full line step below 周期; never clamp into that row.
-        cr.move_to(pad_l, base + 74)
-        cr.show_text(footer)
+    def _chevron(self, cr, x, y, *, up: bool, color) -> None:
+        _rgba(cr, color)
+        cr.set_line_width(1.4)
+        cr.set_line_cap(cairo.LINE_CAP_ROUND)
+        if up:
+            cr.move_to(x - 4, y + 2)
+            cr.line_to(x, y - 2)
+            cr.line_to(x + 4, y + 2)
+        else:
+            cr.move_to(x - 4, y - 2)
+            cr.line_to(x, y + 2)
+            cr.line_to(x + 4, y - 2)
+        cr.stroke()
 
     def _rule(self, cr: cairo.Context, x: float, y: float, right: float, rule) -> None:
         _rgba(cr, rule)
@@ -593,61 +609,12 @@ class LedgerWindow(Gtk.Window):
         cr.line_to(right, y)
         cr.stroke()
 
-    def _pool_section(
-        self, cr, pad_l, pad_r, y_rule, content_w,
-        label, value, dollars, pct, accent, ink, ink_soft, rule,
-    ) -> float:
-        """Hairline at y_rule, then label/% with clearance, dollars, meter. Returns next y."""
-        self._rule(cr, pad_l, y_rule, pad_r, rule)
-        # Clearance below rule must exceed display-figure ascent (~20px for 22pt).
-        base = y_rule + 32
-        _set_font(cr, bold=False, size=11)
-        _rgba(cr, ink_soft)
-        cr.move_to(pad_l, base)
-        cr.show_text(label)
-        _set_font(cr, bold=True, size=22)
-        _rgba(cr, ink)
-        tw = cr.text_extents(value).width
-        cr.move_to(pad_r - tw, base)
-        cr.show_text(value)
-        _set_font(cr, bold=False, size=12)
-        _rgba(cr, ink_soft)
-        cr.move_to(pad_l, base + 24)
-        cr.show_text(dollars)
-        by = base + 38
-        _rgba(cr, rule)
-        cr.rectangle(pad_l, by, content_w, 7)
-        cr.fill()
-        fill = 0.0 if pct is None else max(0.0, min(1.0, pct / 100.0)) * content_w
-        _rgba(cr, accent)
-        cr.rectangle(pad_l, by, fill, 7)
-        cr.fill()
-        return by + 7 + 20
-
-    def _wrapped_text(self, cr, text: str, x: float, y: float, max_w: float, ink) -> None:
-        _set_font(cr, bold=False, size=12)
-        _rgba(cr, ink)
-        line = ""
-        cy = y
-        for ch in text:
-            trial = line + ch
-            if cr.text_extents(trial).width > max_w and line:
-                cr.move_to(x, cy)
-                cr.show_text(line)
-                line = ch
-                cy += 18
-            else:
-                line = trial
-        if line:
-            cr.move_to(x, cy)
-            cr.show_text(line)
-
-
 class LedgerApp:
     def __init__(self) -> None:
         self.settings = load_settings()
         self.snap: Optional[Snapshot] = None
         self.fetching = False
+        self.last_updated: Optional[str] = None
         self._tick_id = 0
         self._clock_id = 0
         self._settings_open = False
@@ -781,7 +748,7 @@ class LedgerApp:
         dialog.format_secondary_text(
             "本机日账。登录态与用量只留在这台电脑上，不经过第三方服务器。\n"
             "Cursor 走本机编辑器登录；GPT 走本机 GPT App / ~/.codex 登录。\n"
-            "悬浮卡：左键拖动，右键菜单。顶栏：API累计% ※ 今日API% · G 周限%。"
+            "悬浮卡：左键拖动，点「展开详情」查看日账，右键打开菜单。"
         )
         dialog.run()
         dialog.destroy()
@@ -813,6 +780,7 @@ class LedgerApp:
     def _on_snapshot(self, snap: Snapshot) -> bool:
         self.snap = snap
         self.fetching = False
+        self.last_updated = _clock_now()[:5]
         if self.settings.display_mode == "panel":
             self._push_panel()
         else:
@@ -837,11 +805,16 @@ class LedgerApp:
     def _push_panel(self) -> None:
         snap = self.snap
         if snap is None or not snap.ok:
-            self.indicator.set_figures(None, None, snap.gpt_percent if snap else None, tone="warn")
+            self.indicator.set_figures(
+                snap.api_percent if snap else None,
+                snap.auto_percent if snap else None,
+                snap.gpt_percent if snap else None,
+                tone="warn",
+            )
             return
         self.indicator.set_figures(
             snap.api_percent,
-            snap.today_percent,
+            snap.auto_percent,
             snap.gpt_percent if snap.gpt_ok else None,
             tone=self.tone(),
         )

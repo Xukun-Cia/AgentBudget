@@ -15,7 +15,7 @@
 | 模式 | 做什么 |
 |---|---|
 | **窗口** | 三项主视图：**Cursor API**、**Cursor Models**、**Codex 周额度**；点「展开详情」看今日账目与订阅周期 |
-| **顶栏** | 应用图标 + ` A 38% · C 13% · G 39%` |
+| **顶栏** | 应用图标 + ` A 12% · C 34% · G 56%`（示例数字） |
 
 三个百分比都取整到一个百分点，不带小数位。右键窗口或点顶栏条目，可在「窗口 / 顶栏」之间切换。
 
@@ -66,7 +66,7 @@ PYTHONPATH=. python3 -m agentbudget
 
 与 Cursor Dashboard 百分比条对齐。分母优先用官方 `totalSpend` + 三个百分比反推，硬编码仅作回退：
 
-| 池 | 百分比分母（当前 Ultra 回退） | 说明 |
+| 池 | 百分比分母（Ultra 档回退值） | 说明 |
 |---|---|---|
 | Other Models（API） | **$500** | 第三方模型（Claude / GPT / Gemini 等） |
 | Cursor Models（Auto） | **$3000** | Auto / Composer / Grok / Vega 等 |

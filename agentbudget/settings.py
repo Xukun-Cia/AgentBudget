@@ -7,18 +7,19 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Dict, Tuple
 
-CONFIG_DIR = Path.home() / ".config" / "cursorbudget"
+CONFIG_DIR = Path.home() / ".config" / "agentbudget"
 CONFIG_PATH = CONFIG_DIR / "config.json"
+LEGACY_CONFIG_PATH = Path.home() / ".config" / "cursorbudget" / "config.json"
 
 # Logical design sizes. The default card stays deliberately compact; secondary
 # accounting details are revealed in place on demand.
 BASE_W = 348
 BASE_H = 430
-DETAIL_H = 694
+DETAIL_H = 600
 
 DISPLAY_MODES = ("window", "panel")
 DISPLAY_MODE_LABELS = {
-    "window": "悬浮卡",
+    "window": "窗口",
     "panel": "顶栏",
 }
 
@@ -116,7 +117,23 @@ class Settings:
         return THEMES[self.theme]
 
 
+def _migrate_legacy_config() -> None:
+    """Carry over settings written under the former CursorBudget name."""
+    if CONFIG_PATH.is_file() or not LEGACY_CONFIG_PATH.is_file():
+        return
+    try:
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
+        CONFIG_PATH.write_text(
+            LEGACY_CONFIG_PATH.read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        CONFIG_PATH.chmod(0o600)
+    except OSError:
+        pass
+
+
 def load_settings() -> Settings:
+    _migrate_legacy_config()
     if not CONFIG_PATH.is_file():
         return Settings().clamp()
     try:

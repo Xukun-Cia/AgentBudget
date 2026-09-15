@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Local debug probe for Cursor usage APIs.
- * Writes only under ~/.config/cursorbudget/debug/ — never into the repo.
+ * Writes only under ~/.config/agentbudget/debug/ — never into the repo.
  * Does not print tokens, emails, or full response bodies to stdout.
  */
 const { execFileSync } = require('child_process');
@@ -10,9 +10,10 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { redactPrivate, secureWriteJson } = require('../lib/privacy');
+const { debugDir: stateDebugDir } = require('../lib/localState');
 
 function debugDir() {
-  const dir = path.join(os.homedir(), '.config', 'cursorbudget', 'debug');
+  const dir = stateDebugDir();
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   try { fs.chmodSync(dir, 0o700); } catch (_) {}
   return dir;

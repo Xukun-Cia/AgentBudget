@@ -9,9 +9,11 @@ import cairo
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from cursorbudget.app import LedgerWindow  # noqa: E402
-from cursorbudget.fetch import Snapshot  # noqa: E402
-from cursorbudget.settings import BASE_H, BASE_W, DETAIL_H, Settings  # noqa: E402
+from agentbudget.app import LedgerWindow  # noqa: E402
+from agentbudget.fetch import Snapshot  # noqa: E402
+from agentbudget.settings import BASE_H, BASE_W, DETAIL_H, Settings  # noqa: E402
+
+PREVIEW_STEM = "agentbudget-v2.0"
 
 
 class PreviewApp:
@@ -21,45 +23,27 @@ class PreviewApp:
         self.last_updated = "14:32"
         self.snap = Snapshot(
             ok=True,
-            remaining_days=11.42,
             api_percent=37.84,
             api_used_cents=9460,
             api_limit_cents=25000,
             auto_percent=12.67,
             auto_used_cents=38010,
             auto_limit_cents=300000,
-            today_percent=0.64,
-            today_cents=160,
-            today_events=2,
-            daily_budget=4.08,
-            membership_type="ultra",
-            included_used_cents=16520,
-            included_limit_cents=40000,
+            today_api_percent=0.64,
+            today_api_cents=160,
+            today_api_events=2,
+            today_auto_percent=0.35,
+            today_auto_cents=1042,
+            today_auto_events=11,
             cycle_start="2026-10-03T08:00:00+08:00",
             cycle_end="2026-11-03T08:00:00+08:00",
             gpt_ok=True,
             gpt_plan="Pro",
             gpt_percent=4,
             gpt_reset_at="2026-10-10T09:40:38+08:00",
-            gpt_window_seconds=604800,
-            gpt_windows=(
-                {
-                    "label": "GPT 周额度", "percent": 4.0,
-                    "reset_at": "2026-10-10T09:40:38+08:00", "is_main": True,
-                },
-                {
-                    "label": "Codex Spark 5 小时额度", "percent": 12.0,
-                    "reset_at": "2026-10-03T17:18:05+08:00", "is_main": False,
-                },
-                {
-                    "label": "Codex Spark 周额度", "percent": 2.0,
-                    "reset_at": "2026-10-10T13:38:05+08:00", "is_main": False,
-                },
-                {
-                    "label": "Reserve 周额度", "percent": 0.0,
-                    "reset_at": "2026-10-10T13:38:05+08:00", "is_main": False,
-                },
-            ),
+            gpt_cycle_start="2026-10-07T09:31:51+08:00",
+            gpt_cycle_end="2026-11-07T09:31:51+08:00",
+            gpt_today_percent=2,
         )
         self._mode_items = []
         self._item_top = None
@@ -83,7 +67,7 @@ def render(path: Path, *, expanded: bool, theme: str) -> None:
 if __name__ == "__main__":
     design = ROOT / "design"
     design.mkdir(exist_ok=True)
-    render(design / "cursorbudget-v1.2-preview.png", expanded=False, theme="dark")
-    render(design / "cursorbudget-v1.2-details.png", expanded=True, theme="dark")
-    print(design / "cursorbudget-v1.2-preview.png")
-    print(design / "cursorbudget-v1.2-details.png")
+    for expanded, suffix in ((False, "preview"), (True, "details")):
+        out = design / f"{PREVIEW_STEM}-{suffix}.png"
+        render(out, expanded=expanded, theme="dark")
+        print(out)

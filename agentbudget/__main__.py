@@ -1,4 +1,4 @@
-"""python -m cursorbudget"""
+"""python -m agentbudget"""
 
 from .app import run
 

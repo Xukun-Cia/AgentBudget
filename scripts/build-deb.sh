@@ -2,8 +2,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-NAME="cursorbudget"
-VERSION="$(sed -n 's/^__version__ = "\(.*\)"/\1/p' "${ROOT}/cursorbudget/__init__.py")"
+NAME="agentbudget"
+VERSION="$(sed -n 's/^__version__ = "\(.*\)"/\1/p' "${ROOT}/agentbudget/__init__.py")"
 ARCH="all"
 PKG_DIR="${ROOT}/dist/${NAME}_${VERSION}_${ARCH}"
 DEB_PATH="${ROOT}/dist/${NAME}_${VERSION}_${ARCH}.deb"
@@ -14,8 +14,8 @@ rm -rf "${PKG_DIR}" "${DEB_PATH}"
 mkdir -p \
   "${PKG_DIR}/DEBIAN" \
   "${PKG_DIR}/usr/bin" \
-  "${PKG_DIR}/usr/lib/python3/dist-packages/cursorbudget" \
-  "${PKG_DIR}/usr/lib/cursorbudget/lib" \
+  "${PKG_DIR}/usr/lib/python3/dist-packages/agentbudget" \
+  "${PKG_DIR}/usr/lib/agentbudget/lib" \
   "${PKG_DIR}/usr/share/applications" \
   "${PKG_DIR}/usr/share/doc/${NAME}" \
   "${PKG_DIR}/usr/share/icons/hicolor" \
@@ -23,16 +23,15 @@ mkdir -p \
 
 python3 "${ROOT}/scripts/render_icon.py" \
   --out "${PKG_DIR}/usr/share/icons/hicolor" \
-  --pixmap "${PKG_DIR}/usr/share/pixmaps/cursorbudget.png"
+  --pixmap "${PKG_DIR}/usr/share/pixmaps/agentbudget.png"
 
 find "${PKG_DIR}" -type d -exec chmod 0755 {} +
 find "${PKG_DIR}/usr/share/icons" "${PKG_DIR}/usr/share/pixmaps" -type f -exec chmod 0644 {} +
 
-install -m 0755 "${ROOT}/bin/cursorbudget" "${PKG_DIR}/usr/bin/cursorbudget"
-install -m 0644 "${ROOT}/cursorbudget/"*.py "${PKG_DIR}/usr/lib/python3/dist-packages/cursorbudget/"
-install -m 0644 "${ROOT}/lib/"*.js "${PKG_DIR}/usr/lib/cursorbudget/lib/"
-install -m 0644 "${ROOT}/lib/"*.json "${PKG_DIR}/usr/lib/cursorbudget/lib/"
-install -m 0644 "${ROOT}/data/cursorbudget.desktop" "${PKG_DIR}/usr/share/applications/cursorbudget.desktop"
+install -m 0755 "${ROOT}/bin/agentbudget" "${PKG_DIR}/usr/bin/agentbudget"
+install -m 0644 "${ROOT}/agentbudget/"*.py "${PKG_DIR}/usr/lib/python3/dist-packages/agentbudget/"
+install -m 0644 "${ROOT}/lib/"*.js "${PKG_DIR}/usr/lib/agentbudget/lib/"
+install -m 0644 "${ROOT}/data/agentbudget.desktop" "${PKG_DIR}/usr/share/applications/agentbudget.desktop"
 install -m 0644 "${ROOT}/README.md" "${PKG_DIR}/usr/share/doc/${NAME}/README.md"
 install -m 0644 "${ROOT}/LICENSE" "${PKG_DIR}/usr/share/doc/${NAME}/copyright"
 
@@ -43,11 +42,13 @@ Section: utils
 Priority: optional
 Architecture: ${ARCH}
 Depends: python3 (>= 3.8), python3-gi, python3-gi-cairo, gir1.2-gtk-3.0, python3-cairo, nodejs
+Conflicts: cursorbudget
+Replaces: cursorbudget
 Maintainer: Xukun-Cia <noreply@users.noreply.github.com>
-Description: Local Cursor and GPT quota monitor for Ubuntu
- CursorBudget shows Cursor API, Cursor Models, and GPT weekly quota in
- a compact floating card or GNOME top-bar readout. Login state and
- usage stay on this machine.
+Description: Local agent quota monitor for Ubuntu
+ AgentBudget shows Cursor API, Cursor Models, and Codex weekly quota in
+ a compact floating window or GNOME top-bar readout, plus today's spend
+ per pool. Login state and usage stay on this machine.
 EOF
 
 cat > "${PKG_DIR}/DEBIAN/postinst" <<'EOF'

@@ -19,30 +19,23 @@ class Snapshot:
     ok: bool
     error: Optional[str] = None
     fetch_error: Optional[str] = None
-    remaining_days: Optional[float] = None
     api_percent: Optional[float] = None
-    today_percent: Optional[float] = None
-    today_cents: Optional[float] = None
-    today_events: Optional[int] = None
-    today_truncated: bool = False
-    today_window_start: Optional[str] = None
-    today_window_end: Optional[str] = None
-    daily_budget: Optional[float] = None
-    is_last_stretch: bool = False
-    remaining_percent: Optional[float] = None
-    membership_type: str = "unknown"
     api_used_cents: Optional[float] = None
     api_limit_cents: Optional[float] = None
     auto_percent: Optional[float] = None
     auto_used_cents: Optional[float] = None
     auto_limit_cents: Optional[float] = None
-    included_used_cents: Optional[float] = None
-    included_limit_cents: Optional[float] = None
-    bonus_cents: Optional[float] = None
+    today_api_percent: Optional[float] = None
+    today_api_cents: Optional[float] = None
+    today_api_events: Optional[int] = None
+    today_auto_percent: Optional[float] = None
+    today_auto_cents: Optional[float] = None
+    today_auto_events: Optional[int] = None
+    today_truncated: bool = False
+    today_window_start: Optional[str] = None
+    today_window_end: Optional[str] = None
     cycle_start: Optional[str] = None
     cycle_end: Optional[str] = None
-    workday_label: Optional[str] = None
-    usage_source: Optional[str] = None
     gpt_ok: bool = False
     gpt_error: Optional[str] = None
     gpt_transient: bool = False
@@ -51,23 +44,20 @@ class Snapshot:
     gpt_plan: Optional[str] = None
     gpt_percent: Optional[float] = None
     gpt_reset_at: Optional[str] = None
-    gpt_window_seconds: Optional[float] = None
-    gpt_allowed: Optional[bool] = None
     gpt_limit_reached: Optional[bool] = None
     gpt_cycle_start: Optional[str] = None
     gpt_cycle_end: Optional[str] = None
-    gpt_source: Optional[str] = None
-    gpt_windows: tuple = ()
-    gpt_extras: tuple = ()
+    gpt_today_percent: Optional[float] = None
+    gpt_today_partial: bool = False
 
 
 def lib_dir() -> Path:
-    env = os.environ.get("CURSORBUDGET_LIB")
+    env = os.environ.get("AGENTBUDGET_LIB")
     if env:
         candidate = Path(env)
         if (candidate / "status-json.js").is_file():
             return candidate
-    installed = Path("/usr/lib/cursorbudget/lib")
+    installed = Path("/usr/lib/agentbudget/lib")
     if (installed / "status-json.js").is_file():
         return installed
     source = Path(__file__).resolve().parents[1] / "lib"
@@ -137,35 +127,32 @@ def _int(value) -> Optional[int]:
     return None
 
 
+def _bool_or_none(value) -> Optional[bool]:
+    return value if isinstance(value, bool) else None
+
+
 def snapshot_from_dict(data: dict) -> Snapshot:
     return Snapshot(
         ok=bool(data.get("ok")),
         error=data.get("error") or None,
         fetch_error=data.get("fetchError") or None,
-        remaining_days=_num(data.get("remainingDays")),
         api_percent=_num(data.get("apiPercent")),
-        today_percent=_num(data.get("todayPercent")),
-        today_cents=_num(data.get("todayCents")),
-        today_events=_int(data.get("todayEvents")),
-        today_truncated=bool(data.get("todayTruncated")),
-        today_window_start=data.get("todayWindowStart") or None,
-        today_window_end=data.get("todayWindowEnd") or None,
-        daily_budget=_num(data.get("dailyBudget")),
-        is_last_stretch=bool(data.get("isLastStretch")),
-        remaining_percent=_num(data.get("remainingPercent")),
-        membership_type=str(data.get("membershipType") or "unknown"),
         api_used_cents=_num(data.get("apiUsedCents")),
         api_limit_cents=_num(data.get("apiLimitCents")),
         auto_percent=_num(data.get("autoPercent")),
         auto_used_cents=_num(data.get("autoUsedCents")),
         auto_limit_cents=_num(data.get("autoLimitCents")),
-        included_used_cents=_num(data.get("includedUsedCents")),
-        included_limit_cents=_num(data.get("includedLimitCents")),
-        bonus_cents=_num(data.get("bonusCents")),
+        today_api_percent=_num(data.get("todayApiPercent")),
+        today_api_cents=_num(data.get("todayApiCents")),
+        today_api_events=_int(data.get("todayApiEvents")),
+        today_auto_percent=_num(data.get("todayAutoPercent")),
+        today_auto_cents=_num(data.get("todayAutoCents")),
+        today_auto_events=_int(data.get("todayAutoEvents")),
+        today_truncated=bool(data.get("todayTruncated")),
+        today_window_start=data.get("todayWindowStart") or None,
+        today_window_end=data.get("todayWindowEnd") or None,
         cycle_start=data.get("cycleStart") or None,
         cycle_end=data.get("cycleEnd") or None,
-        workday_label=data.get("workdayLabel") or None,
-        usage_source=data.get("usageSource") or None,
         gpt_ok=bool(data.get("gptOk")),
         gpt_error=data.get("gptError") or None,
         gpt_transient=bool(data.get("gptTransient")),
@@ -174,14 +161,11 @@ def snapshot_from_dict(data: dict) -> Snapshot:
         gpt_plan=data.get("gptPlan") or None,
         gpt_percent=_num(data.get("gptPercent")),
         gpt_reset_at=data.get("gptResetAt") or None,
-        gpt_window_seconds=_num(data.get("gptWindowSeconds")),
-        gpt_allowed=data.get("gptAllowed") if isinstance(data.get("gptAllowed"), bool) else None,
-        gpt_limit_reached=data.get("gptLimitReached") if isinstance(data.get("gptLimitReached"), bool) else None,
+        gpt_limit_reached=_bool_or_none(data.get("gptLimitReached")),
         gpt_cycle_start=data.get("gptCycleStart") or None,
         gpt_cycle_end=data.get("gptCycleEnd") or None,
-        gpt_source=data.get("gptSource") or None,
-        gpt_windows=_gpt_rows(data.get("gptWindows")),
-        gpt_extras=_extras(data.get("gptExtras")),
+        gpt_today_percent=_num(data.get("gptTodayPercent")),
+        gpt_today_partial=bool(data.get("gptTodayPartial")),
     )
 
 
@@ -207,7 +191,7 @@ def preserve_last_good_gpt(current: Snapshot, previous: Optional[Snapshot]) -> S
     values = {
         field: getattr(previous, field)
         for field in Snapshot.__dataclass_fields__
-        if field.startswith("gpt_")
+        if field.startswith("gpt_") and not field.startswith("gpt_today")
     }
     values.update({
         "gpt_ok": True,
@@ -218,53 +202,10 @@ def preserve_last_good_gpt(current: Snapshot, previous: Optional[Snapshot]) -> S
     return replace(current, **values)
 
 
-def _extras(value) -> tuple:
-    if not isinstance(value, list):
-        return ()
-    rows = []
-    for item in value:
-        if not isinstance(item, dict):
-            continue
-        label = item.get("label")
-        pct = _num(item.get("percent"))
-        if not label or pct is None:
-            continue
-        rows.append((str(label), pct))
-    return tuple(rows)
-
-
-def _gpt_rows(value) -> tuple:
-    if not isinstance(value, list):
-        return ()
-    rows = []
-    for item in value:
-        if not isinstance(item, dict):
-            continue
-        label = item.get("label")
-        pct = _num(item.get("percent"))
-        if not label or pct is None:
-            continue
-        rows.append({
-            "label": str(label),
-            "group": str(item.get("group") or ""),
-            "kind": str(item.get("kind") or ""),
-            "percent": pct,
-            "reset_at": item.get("resetAt") or None,
-            "window_seconds": _num(item.get("windowSeconds")),
-            "limit_reached": (
-                item.get("limitReached")
-                if isinstance(item.get("limitReached"), bool)
-                else None
-            ),
-            "is_main": bool(item.get("isMain")),
-        })
-    return tuple(rows)
-
-
 def fetch_snapshot() -> Snapshot:
     script = lib_dir() / "status-json.js"
     env = os.environ.copy()
-    env.pop("CURSORBUDGET_DEBUG", None)
+    env.pop("AGENTBUDGET_DEBUG", None)
     try:
         proc = subprocess.run(
             [resolve_node(), str(script)],

@@ -1,4 +1,4 @@
-"""CursorBudget day-ledger: floating card or GNOME top-bar figures."""
+"""AgentBudget day-ledger: floating window or GNOME top-bar figures."""
 
 from __future__ import annotations
 
@@ -6,7 +6,6 @@ import math
 import threading
 from datetime import datetime
 from typing import Optional
-from urllib.parse import urlparse
 
 import cairo
 import gi
@@ -17,6 +16,7 @@ from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
 from . import __app_name__, __version__
 from .fetch import Snapshot, fetch_snapshot, preserve_last_good_gpt
+from .fmt import fmt_pct, fmt_pct_fine, fmt_usd, fmt_when
 from .icon import paint_mark
 from .indicator import PanelIndicator
 from .settings import (
@@ -36,56 +36,8 @@ from .settings import (
     save_settings,
 )
 
-DASHBOARD_URL = "https://cursor.com/dashboard/usage"
-GPT_DASHBOARD_URL = "https://chatgpt.com/#settings/Usage"
-
-
 def _rgba(cr: cairo.Context, rgb, a: float = 1.0) -> None:
     cr.set_source_rgba(rgb[0], rgb[1], rgb[2], a)
-
-
-def _fmt_pct(value: Optional[float]) -> str:
-    if value is None or not math.isfinite(value):
-        return "—"
-    return f"{value:.2f}%"
-
-
-def _fmt_gpt_pct(value: Optional[float]) -> str:
-    """Do not invent decimal precision the quota service did not return."""
-    if value is None or not math.isfinite(value):
-        return "—"
-    if abs(value - round(value)) < 1e-9:
-        return f"{round(value):.0f}%"
-    return f"{value:.2f}".rstrip("0").rstrip(".") + "%"
-
-
-def _fmt_days(value: Optional[float]) -> str:
-    if value is None or not math.isfinite(value):
-        return "—"
-    return f"{value:.2f}"
-
-
-def _fmt_usd(cents: Optional[float]) -> str:
-    if cents is None or not math.isfinite(cents):
-        return "—"
-    return f"${cents / 100:,.2f}"
-
-
-def _fmt_when(value: Optional[str]) -> str:
-    if not value:
-        return "—"
-    try:
-        raw = str(value).strip()
-        if raw.isdigit():
-            ms = int(raw)
-            if ms > 10_000_000_000:
-                ms /= 1000.0
-            dt = datetime.fromtimestamp(ms).astimezone()
-        else:
-            dt = datetime.fromisoformat(raw.replace("Z", "+00:00")).astimezone()
-        return f"{dt.month}/{dt.day} {dt.hour:02d}:{dt.minute:02d}"
-    except (ValueError, TypeError, OSError, OverflowError):
-        return str(value)[:16]
 
 
 def _match_font(query: str, fallback: str) -> str:
@@ -145,6 +97,43 @@ def _usage_tone(percent: Optional[float], warning: float, critical: float) -> st
     if percent >= warning:
         return "warn"
     return "ok"
+
+
+def _cursor_today(
+    percent: Optional[float],
+    cents: Optional[float],
+    events: Optional[int],
+    truncated: bool,
+) -> str:
+    """Today's spend in one Cursor pool: share of the pool, dollars, events."""
+    parts = []
+    if percent is not None:
+        parts.append(fmt_pct_fine(percent))
+    if cents is not None:
+        parts.append(fmt_usd(cents))
+    if not parts:
+        return "—"
+    if events is not None:
+        parts.append(f"{events} 笔")
+    if truncated:
+        parts.append("未拉全")
+    return " · ".join(parts)
+
+
+def _codex_today(snap: Snapshot) -> str:
+    """Codex has no per-day figure upstream, only what this machine sampled."""
+    percent = snap.gpt_today_percent
+    if percent is None:
+        return "—"
+    if snap.gpt_today_partial:
+        return "—" if percent <= 0 else f"≥{fmt_pct(percent)}"
+    return fmt_pct(percent)
+
+
+def _cycle_text(start: Optional[str], end: Optional[str]) -> str:
+    if not start and not end:
+        return "—"
+    return f"{fmt_when(start)} → {fmt_when(end)}"
 
 
 class SettingsDialog(Gtk.Dialog):
@@ -227,7 +216,7 @@ class SettingsDialog(Gtk.Dialog):
         grid.attach(self.crit_spin, 1, 5, 1, 1)
 
         hint = Gtk.Label(
-            label="顶栏只保留 Cursor API、Cursor Models 与 GPT 周额度。完整明细在悬浮卡展开查看。",
+            label="顶栏只保留 Cursor API、Cursor Models 与 Codex 周额度。今日账目在窗口展开查看。",
             xalign=0,
         )
         hint.set_line_wrap(True)
@@ -273,20 +262,14 @@ def _build_menu(app: "LedgerApp", *, show_always_on_top: bool) -> Gtk.Menu:
         app._item_top = item_top
 
     menu.append(Gtk.SeparatorMenuItem())
-    item_dash = Gtk.MenuItem(label="打开 Cursor 用量页")
-    item_dash.connect("activate", lambda *_: app.open_dashboard())
-    menu.append(item_dash)
-    item_gpt = Gtk.MenuItem(label="打开 GPT 用量页")
-    item_gpt.connect("activate", lambda *_: app.open_gpt_dashboard())
-    menu.append(item_gpt)
     item_refresh = Gtk.MenuItem(label="立即刷新")
     item_refresh.connect("activate", lambda *_: app.refresh_now())
     menu.append(item_refresh)
-
-    menu.append(Gtk.SeparatorMenuItem())
     item_settings = Gtk.MenuItem(label="设置…")
     item_settings.connect("activate", lambda *_: app.open_settings())
     menu.append(item_settings)
+
+    menu.append(Gtk.SeparatorMenuItem())
     item_about = Gtk.MenuItem(label=f"关于 {__app_name__} {__version__}")
     item_about.connect("activate", lambda *_: app.show_about())
     menu.append(item_about)
@@ -432,7 +415,7 @@ class LedgerWindow(Gtk.Window):
         _set_font(cr, bold=True, size=13, family="display")
         _rgba(cr, ink)
         cr.move_to(42, 30)
-        cr.show_text("CursorBudget")
+        cr.show_text(__app_name__)
 
         updated = getattr(self.app, "last_updated", None) or _clock_now()[:5]
         status = "刷新中" if self.app.fetching else f"更新 {updated}"
@@ -452,25 +435,25 @@ class LedgerWindow(Gtk.Window):
             self._paint_empty(cr, ink, ink_soft, rule, accent)
             return
 
-        api_sub = f"{_fmt_usd(snap.api_used_cents)} / {_fmt_usd(snap.api_limit_cents)}"
-        cursor_sub = f"{_fmt_usd(snap.auto_used_cents)} / {_fmt_usd(snap.auto_limit_cents)}"
+        api_sub = f"{fmt_usd(snap.api_used_cents)} / {fmt_usd(snap.api_limit_cents)}"
+        cursor_sub = f"{fmt_usd(snap.auto_used_cents)} / {fmt_usd(snap.auto_limit_cents)}"
         if snap.gpt_ok:
             gpt_sub = " · ".join(
                 part for part in (
                     "缓存值" if snap.gpt_stale else "",
-                    snap.gpt_plan or "GPT",
-                    f"重置 {_fmt_when(snap.gpt_reset_at)}" if snap.gpt_reset_at else "",
+                    snap.gpt_plan or "Codex",
+                    f"重置 {fmt_when(snap.gpt_reset_at)}" if snap.gpt_reset_at else "",
                 ) if part
             )
         else:
-            gpt_sub = snap.gpt_error or "未读取到 GPT 登录态"
+            gpt_sub = snap.gpt_error or "未读取到 Codex 登录态"
 
         api_color = alert if tone in ("warn", "critical") else accent
-        self._metric_row(cr, 64, "Cursor API", _fmt_pct(snap.api_percent), api_sub,
+        self._metric_row(cr, 64, "Cursor API", fmt_pct(snap.api_percent), api_sub,
                          snap.api_percent, api_color, ink, ink_soft, rule)
-        self._metric_row(cr, 157, "Cursor Models", _fmt_pct(snap.auto_percent), cursor_sub,
+        self._metric_row(cr, 157, "Cursor Models", fmt_pct(snap.auto_percent), cursor_sub,
                          snap.auto_percent, accent, ink, ink_soft, rule)
-        self._metric_row(cr, 250, "GPT 周额度", _fmt_gpt_pct(snap.gpt_percent), gpt_sub,
+        self._metric_row(cr, 250, "Codex 周额度", fmt_pct(snap.gpt_percent), gpt_sub,
                          snap.gpt_percent, alert if snap.gpt_limit_reached else accent,
                          ink, ink_soft, rule)
 
@@ -479,12 +462,6 @@ class LedgerWindow(Gtk.Window):
         _rgba(cr, ink)
         cr.move_to(22, 382)
         cr.show_text("收起详情" if self.details_expanded else "展开详情")
-        summary = f"今日 {_fmt_pct(snap.today_percent)} · 剩余 {_fmt_days(snap.remaining_days)} 工作日"
-        _set_font(cr, size=9)
-        _rgba(cr, ink_soft)
-        summary_w = cr.text_extents(summary).width
-        cr.move_to(w - 38 - summary_w, 381)
-        cr.show_text(summary)
         self._chevron(cr, w - 21, 376, up=self.details_expanded, color=ink_soft)
 
         if self.details_expanded:
@@ -540,42 +517,19 @@ class LedgerWindow(Gtk.Window):
         cr.move_to(22, 431)
         cr.show_text("本期概览")
 
-        today = _fmt_usd(snap.today_cents)
-        if snap.today_events is not None:
-            today += f" · {snap.today_events} 笔"
-        if snap.today_truncated:
-            today += " · 未拉全"
-        daily_label = "剩余额度" if snap.is_last_stretch else "建议日用"
-        daily_value = _fmt_pct(snap.daily_budget)
-        if not snap.is_last_stretch and snap.daily_budget is not None:
-            daily_value = f"{snap.daily_budget:.2f}% / 天"
-        plan = snap.membership_type or "—"
-        if snap.included_limit_cents is not None:
-            plan += f" · {_fmt_usd(snap.included_used_cents)} / {_fmt_usd(snap.included_limit_cents)}"
-
-        self._detail_line(cr, 459, "今日 API", f"{_fmt_pct(snap.today_percent)} · {today}", ink, ink_soft)
-        self._detail_line(cr, 487, daily_label, daily_value, ink, ink_soft)
-        self._detail_line(cr, 515, "Cursor 套餐", plan, ink, ink_soft)
-        cycle = f"{_fmt_when(snap.cycle_start)} → {_fmt_when(snap.cycle_end)}"
-        self._detail_line(cr, 543, "Cursor 周期", cycle, ink, ink_soft)
-
-        extras = [row for row in snap.gpt_windows if not row.get("is_main")]
-        _set_font(cr, bold=True, size=10)
-        _rgba(cr, accent)
-        cr.move_to(22, 578)
-        cr.show_text("其他 GPT 限额")
-        if extras:
-            for index, row in enumerate(extras[:3]):
-                value = f"{_fmt_gpt_pct(row.get('percent'))} · 重置 {_fmt_when(row.get('reset_at'))}"
-                self._detail_line(
-                    cr, 606 + index * 27, str(row.get("label") or "额外额度"),
-                    value, ink, ink_soft,
-                )
-        else:
-            _set_font(cr, size=10)
-            _rgba(cr, ink_soft)
-            cr.move_to(22, 606)
-            cr.show_text("当前账户未返回其他额度组")
+        self._detail_line(cr, 459, "今日 A", _cursor_today(
+            snap.today_api_percent, snap.today_api_cents,
+            snap.today_api_events, snap.today_truncated,
+        ), ink, ink_soft)
+        self._detail_line(cr, 487, "今日 C", _cursor_today(
+            snap.today_auto_percent, snap.today_auto_cents,
+            snap.today_auto_events, snap.today_truncated,
+        ), ink, ink_soft)
+        self._detail_line(cr, 515, "今日 G", _codex_today(snap), ink, ink_soft)
+        self._detail_line(cr, 543, "Cursor 周期", _cycle_text(
+            snap.cycle_start, snap.cycle_end), ink, ink_soft)
+        self._detail_line(cr, 571, "Codex 周期", _cycle_text(
+            snap.gpt_cycle_start, snap.gpt_cycle_end), ink, ink_soft)
 
     def _detail_line(self, cr, y, label, value, ink, ink_soft) -> None:
         _set_font(cr, size=10)
@@ -628,8 +582,6 @@ class LedgerApp:
         self.window = LedgerWindow(self)
         self.indicator = PanelIndicator(
             on_mode=self.set_mode,
-            on_dashboard=self.open_dashboard,
-            on_gpt_dashboard=self.open_gpt_dashboard,
             on_refresh=self.refresh_now,
             on_settings=self.open_settings,
             on_about=self.show_about,
@@ -748,23 +700,11 @@ class LedgerApp:
         )
         dialog.format_secondary_text(
             "本机日账。登录态与用量只留在这台电脑上，不经过第三方服务器。\n"
-            "Cursor 走本机编辑器登录；GPT 走本机 GPT App / ~/.codex 登录。\n"
-            "悬浮卡：左键拖动，点「展开详情」查看日账，右键打开菜单。"
+            "Cursor 走本机编辑器登录；Codex 走本机 ~/.codex 登录。\n"
+            "窗口：左键拖动，点「展开详情」查看今日账目，右键打开菜单。"
         )
         dialog.run()
         dialog.destroy()
-
-    def open_dashboard(self) -> None:
-        parsed = urlparse(DASHBOARD_URL)
-        if parsed.scheme != "https" or parsed.netloc != "cursor.com":
-            return
-        Gtk.show_uri_on_window(self.window, DASHBOARD_URL, Gdk.CURRENT_TIME)
-
-    def open_gpt_dashboard(self) -> None:
-        parsed = urlparse(GPT_DASHBOARD_URL)
-        if parsed.scheme != "https" or parsed.netloc != "chatgpt.com":
-            return
-        Gtk.show_uri_on_window(self.window, GPT_DASHBOARD_URL, Gdk.CURRENT_TIME)
 
     def refresh_now(self) -> None:
         if self.fetching:
@@ -831,11 +771,11 @@ class LedgerApp:
 def run() -> None:
     from pathlib import Path
 
-    GLib.set_prgname("cursorbudget")
-    icon_png = Path(__file__).resolve().parents[1] / "data" / "icons" / "cursorbudget.png"
+    GLib.set_prgname("agentbudget")
+    icon_png = Path(__file__).resolve().parents[1] / "data" / "icons" / "agentbudget.png"
     if icon_png.is_file():
         Gtk.Window.set_default_icon_from_file(str(icon_png))
     else:
-        Gtk.Window.set_default_icon_name("cursorbudget")
+        Gtk.Window.set_default_icon_name("agentbudget")
     LedgerApp()
     Gtk.main()

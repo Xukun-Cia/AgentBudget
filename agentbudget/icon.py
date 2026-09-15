@@ -1,4 +1,4 @@
-"""CursorBudget mark: an open day-ledger, not a monitor glyph."""
+"""AgentBudget mark: an open day-ledger, not a monitor glyph."""
 
 from __future__ import annotations
 

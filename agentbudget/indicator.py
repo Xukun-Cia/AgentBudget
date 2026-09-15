@@ -10,6 +10,7 @@ import cairo
 from gi.repository import Gio, GLib
 
 from . import __app_name__, __version__
+from .fmt import fmt_pct
 from .icon import paint_app_icon
 
 SNI_PATH = "/StatusNotifierItem"
@@ -140,29 +141,24 @@ MENU_XML = """
 ID_WINDOW = 1
 ID_PANEL = 2
 ID_SEP1 = 3
-ID_DASHBOARD = 4
-ID_GPT_DASHBOARD = 11
-ID_REFRESH = 5
+ID_REFRESH = 4
+ID_SETTINGS = 5
 ID_SEP2 = 6
-ID_SETTINGS = 7
-ID_ABOUT = 8
-ID_SEP3 = 9
-ID_QUIT = 10
+ID_ABOUT = 7
+ID_QUIT = 8
 # Stable width guide for the three core quota signals.
-LABEL_GUIDE = "A 100.00% · C 100.00% · G 100%"
+LABEL_GUIDE = " A 100% · C 100% · G 100%"
 
 
 def panel_label(api, cursor, gpt=None, gpt_stale: bool = False) -> str:
-    """Top bar text: Cursor API, Cursor Models, GPT weekly quota."""
-    api_txt = f"{api:.2f}%" if isinstance(api, (int, float)) else "—"
-    cursor_txt = f"{cursor:.2f}%" if isinstance(cursor, (int, float)) else "—"
-    if isinstance(gpt, (int, float)):
-        gpt_txt = f"{gpt:.0f}%" if abs(gpt - round(gpt)) < 1e-9 else f"{gpt:.2f}".rstrip("0") + "%"
-        if gpt_stale:
-            gpt_txt = f"~{gpt_txt}"
-    else:
-        gpt_txt = "—"
-    return f"A {api_txt} · C {cursor_txt} · G {gpt_txt}"
+    """Top bar text: Cursor API, Cursor Models, Codex weekly quota.
+
+    The leading space keeps the figures off the app icon.
+    """
+    gpt_txt = fmt_pct(gpt)
+    if gpt_stale and gpt_txt != "—":
+        gpt_txt = f"~{gpt_txt}"
+    return f" A {fmt_pct(api)} · C {fmt_pct(cursor)} · G {gpt_txt}"
 
 
 def _icon_theme_path() -> str:
@@ -195,8 +191,6 @@ class PanelIndicator:
         self,
         *,
         on_mode: Callable[[str], None],
-        on_dashboard: Callable[[], None],
-        on_gpt_dashboard: Callable[[], None],
         on_refresh: Callable[[], None],
         on_settings: Callable[[], None],
         on_about: Callable[[], None],
@@ -204,8 +198,6 @@ class PanelIndicator:
         get_mode: Callable[[], str],
     ) -> None:
         self._on_mode = on_mode
-        self._on_dashboard = on_dashboard
-        self._on_gpt_dashboard = on_gpt_dashboard
         self._on_refresh = on_refresh
         self._on_settings = on_settings
         self._on_about = on_about
@@ -233,7 +225,7 @@ class PanelIndicator:
     def start(self) -> None:
         self._owner_id = Gio.bus_own_name(
             Gio.BusType.SESSION,
-            f"org.kde.StatusNotifierItem.cursorbudget-{os.getpid()}",
+            f"org.kde.StatusNotifierItem.agentbudget-{os.getpid()}",
             Gio.BusNameOwnerFlags.NONE,
             self._on_bus_acquired,
             self._on_name_acquired,
@@ -367,14 +359,14 @@ class PanelIndicator:
     def _sni_get(self, _c, _s, _p, _i, name: str):
         mapping = {
             "Category": GLib.Variant("s", "SystemServices"),
-            "Id": GLib.Variant("s", "cursorbudget"),
+            "Id": GLib.Variant("s", "agentbudget"),
             "Title": GLib.Variant("s", __app_name__),
             "Status": GLib.Variant("s", self._status),
             "WindowId": GLib.Variant("i", 0),
             "IconThemePath": GLib.Variant("s", self._icon_theme),
             "Menu": GLib.Variant("o", MENU_PATH),
             "ItemIsMenu": GLib.Variant("b", True),
-            "IconName": GLib.Variant("s", "cursorbudget"),
+            "IconName": GLib.Variant("s", "agentbudget"),
             "IconPixmap": GLib.Variant("a(iiay)", [self._pixmap]),
             "OverlayIconName": GLib.Variant("s", ""),
             "OverlayIconPixmap": GLib.Variant("a(iiay)", []),
@@ -388,7 +380,7 @@ class PanelIndicator:
 
     def _sni_method(self, _c, _s, _p, _i, method: str, _params, invocation):
         if method == "Activate":
-            GLib.idle_add(self._on_dashboard)
+            GLib.idle_add(self._on_refresh)
         invocation.return_value(None)
 
     def _menu_get(self, _c, _s, _p, _i, name: str):
@@ -404,7 +396,7 @@ class PanelIndicator:
         mode = self._get_mode()
         if item_id == ID_WINDOW:
             return {
-                "label": GLib.Variant("s", "悬浮卡"),
+                "label": GLib.Variant("s", "窗口"),
                 "toggle-type": GLib.Variant("s", "radio"),
                 "toggle-state": GLib.Variant("i", 1 if mode == "window" else 0),
                 "enabled": GLib.Variant("b", True),
@@ -418,11 +410,9 @@ class PanelIndicator:
                 "enabled": GLib.Variant("b", True),
                 "visible": GLib.Variant("b", True),
             }
-        if item_id in (ID_SEP1, ID_SEP2, ID_SEP3):
+        if item_id in (ID_SEP1, ID_SEP2):
             return {"type": GLib.Variant("s", "separator"), "visible": GLib.Variant("b", True)}
         labels = {
-            ID_DASHBOARD: "打开 Cursor 用量页",
-            ID_GPT_DASHBOARD: "打开 GPT 用量页",
             ID_REFRESH: "立即刷新",
             ID_SETTINGS: "设置…",
             ID_ABOUT: f"关于 {__app_name__} {__version__}",
@@ -440,8 +430,8 @@ class PanelIndicator:
         children = [
             _leaf(i, self._item_props(i))
             for i in (
-                ID_WINDOW, ID_PANEL, ID_SEP1, ID_DASHBOARD, ID_GPT_DASHBOARD, ID_REFRESH,
-                ID_SEP2, ID_SETTINGS, ID_ABOUT, ID_SEP3, ID_QUIT,
+                ID_WINDOW, ID_PANEL, ID_SEP1, ID_REFRESH, ID_SETTINGS,
+                ID_SEP2, ID_ABOUT, ID_QUIT,
             )
         ]
         return GLib.Variant(
@@ -499,10 +489,6 @@ class PanelIndicator:
             self._on_mode("window")
         elif item_id == ID_PANEL:
             self._on_mode("panel")
-        elif item_id == ID_DASHBOARD:
-            self._on_dashboard()
-        elif item_id == ID_GPT_DASHBOARD:
-            self._on_gpt_dashboard()
         elif item_id == ID_REFRESH:
             self._on_refresh()
         elif item_id == ID_SETTINGS:

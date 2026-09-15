@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render CursorBudget hicolor icons."""
+"""Render AgentBudget hicolor icons."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import cairo
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from cursorbudget.icon import paint_app_icon  # noqa: E402
+from agentbudget.icon import paint_app_icon  # noqa: E402
 
 SIZES = (16, 22, 24, 32, 48, 64, 128, 256, 512)
 
@@ -28,11 +28,11 @@ def render_png(path: Path, size: int) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", type=Path, default=ROOT / "data" / "icons" / "hicolor")
-    parser.add_argument("--pixmap", type=Path, default=ROOT / "data" / "icons" / "cursorbudget.png")
+    parser.add_argument("--pixmap", type=Path, default=ROOT / "data" / "icons" / "agentbudget.png")
     args = parser.parse_args()
     out: Path = args.out
     for size in SIZES:
-        render_png(out / f"{size}x{size}" / "apps" / "cursorbudget.png", size)
+        render_png(out / f"{size}x{size}" / "apps" / "agentbudget.png", size)
     if args.pixmap:
         render_png(args.pixmap, 256)
     print(f"Wrote icons under {out}")

@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=AgentBudget
+GenericName=Agent 额度
+Comment=本机查看 Cursor API、Cursor Models 与 Codex 周额度
+Exec=agentbudget
+Icon=agentbudget
+Terminal=false
+Categories=Utility;Finance;
+Keywords=agent;cursor;codex;gpt;budget;api;usage;quota;额度;
+StartupNotify=false
+StartupWMClass=agentbudget

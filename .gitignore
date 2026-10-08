@@ -16,3 +16,10 @@ __pycache__/
 *.pyc
 .venv/
 data/icons/
+
+# Local agent instructions and runtime artifacts are not part of the tool.
+.agents/
+.codex/
+*.pem
+*.key
+*.sqlite*

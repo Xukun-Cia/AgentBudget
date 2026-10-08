@@ -192,7 +192,7 @@ class SettingsDialog(Gtk.Dialog):
         refresh_box.pack_start(Gtk.Label(label="秒", xalign=0), False, False, 0)
         grid.attach(refresh_box, 1, 2, 1, 1)
 
-        grid.attach(Gtk.Label(label="纸色", xalign=0), 0, 3, 1, 1)
+        grid.attach(Gtk.Label(label="外观", xalign=0), 0, 3, 1, 1)
         self.theme_combo = Gtk.ComboBoxText()
         for key in ("light", "dark"):
             self.theme_combo.append(key, THEME_PRESETS[key])
@@ -216,7 +216,7 @@ class SettingsDialog(Gtk.Dialog):
         grid.attach(self.crit_spin, 1, 5, 1, 1)
 
         hint = Gtk.Label(
-            label="顶栏只保留 Cursor API、Cursor Models 与 Codex 周额度。今日账目在窗口展开查看。",
+            label="顶栏与主界面显示 A / G；展开查看 C 与订阅周期。",
             xalign=0,
         )
         hint.set_line_wrap(True)
@@ -285,6 +285,7 @@ class LedgerWindow(Gtk.Window):
         super().__init__(title=__app_name__)
         self.app = app
         self.details_expanded = False
+        self._hover = None
         win_w, win_h = app.settings.window_size()
 
         self.set_default_size(win_w, win_h)
@@ -311,16 +312,22 @@ class LedgerWindow(Gtk.Window):
         self.drawing = Gtk.DrawingArea()
         self.drawing.set_size_request(win_w, win_h)
         self.drawing.connect("draw", self._on_draw)
+        self.drawing.set_can_focus(True)
+        self.drawing.connect("key-press-event", self._on_key_press)
+        self.drawing.connect("focus-in-event", lambda *_: self.redraw())
+        self.drawing.connect("focus-out-event", lambda *_: self.redraw())
         self.add(self.drawing)
 
         self.add_events(
             Gdk.EventMask.BUTTON_PRESS_MASK
             | Gdk.EventMask.BUTTON_RELEASE_MASK
             | Gdk.EventMask.POINTER_MOTION_MASK
+            | Gdk.EventMask.LEAVE_NOTIFY_MASK
         )
         self.connect("button-press-event", self._on_button_press)
         self.connect("button-release-event", self._on_button_release)
         self.connect("motion-notify-event", self._on_motion)
+        self.connect("leave-notify-event", self._on_leave)
         self.connect("delete-event", lambda *_: app.quit() or True)
 
         self.menu = _build_menu(app, show_always_on_top=True)
@@ -360,10 +367,11 @@ class LedgerWindow(Gtk.Window):
             alloc = self.drawing.get_allocation()
             logical_x = event.x * BASE_W / max(1, alloc.width)
             logical_y = event.y * self.logical_height / max(1, alloc.height)
-            if logical_x >= BASE_W - 36 and logical_y <= 48:
+            self.drawing.grab_focus()
+            if logical_x >= BASE_W - 48 and 12 <= logical_y <= 48:
                 self.app.quit()
                 return True
-            if 346 <= logical_y <= 404:
+            if 24 <= logical_x <= BASE_W - 24 and 376 <= logical_y <= 414:
                 self.toggle_details()
                 return True
             self._dragging = True
@@ -380,7 +388,36 @@ class LedgerWindow(Gtk.Window):
             self._dragging = False
         return False
 
+    def _on_key_press(self, _w, event) -> bool:
+        if event.keyval in (Gdk.KEY_Return, Gdk.KEY_space):
+            self.toggle_details()
+            return True
+        if event.keyval == Gdk.KEY_F5:
+            self.app.refresh_now()
+            return True
+        if event.keyval == Gdk.KEY_Menu:
+            self.menu.popup_at_widget(self.drawing, Gdk.Gravity.SOUTH_WEST,
+                                      Gdk.Gravity.NORTH_WEST, event)
+            return True
+        return False
+
+    def _on_leave(self, *_args) -> bool:
+        self._hover = None
+        self.redraw()
+        return False
+
     def _on_motion(self, _w, event: Gdk.EventMotion) -> bool:
+        alloc = self.drawing.get_allocation()
+        x = event.x * BASE_W / max(1, alloc.width)
+        y = event.y * self.logical_height / max(1, alloc.height)
+        hover = ("close" if x >= BASE_W - 48 and 12 <= y <= 48 else
+                 "details" if 24 <= x <= BASE_W - 24 and 376 <= y <= 414 else None)
+        if hover != self._hover:
+            self._hover = hover
+            self.redraw()
+            if self.get_window():
+                self.get_window().set_cursor(Gdk.Cursor.new_from_name(
+                    self.get_display(), "pointer" if hover else "default"))
         if self._dragging and (event.state & Gdk.ModifierType.BUTTON1_MASK):
             dx = int(event.x_root) - self._drag_ox
             dy = int(event.y_root) - self._drag_oy
@@ -396,152 +433,136 @@ class LedgerWindow(Gtk.Window):
         cr.restore()
         return False
 
+    def _text(self, cr, text, x, y, color, size=11, bold=False, family="body", width=None):
+        _set_font(cr, bold=bold, size=size, family=family)
+        value = str(text)
+        if width is not None:
+            while value and cr.text_extents(value).width > width:
+                value = value[:-2] + "…" if len(value) > 1 else ""
+        _rgba(cr, color)
+        cr.move_to(x, y)
+        cr.show_text(value)
+
     def _paint_logical(self, cr: cairo.Context) -> None:
-        """Compact three-signal view with progressive disclosure."""
+        """Two large quota instruments, with secondary information on demand."""
         snap = self.app.snap
         w, h = BASE_W, self.logical_height
-        paper, ink, ink_soft, rule, accent, alert, _unused = self.app.settings.colors()
-
+        paper, ink, muted, rule, accent, alert, _ = self.app.settings.colors()
+        cr.set_operator(cairo.OPERATOR_SOURCE)
+        cr.set_source_rgba(0, 0, 0, 0)
+        cr.paint()
+        cr.set_operator(cairo.OPERATOR_OVER)
+        # An inset frame gives the native window a quiet, machined edge.
+        _rounded_rect(cr, 4, 4, w - 8, h - 8, 22)
+        cr.save()
+        cr.clip()
         _rgba(cr, paper)
-        cr.rectangle(0, 0, w, h)
-        cr.fill()
-        _rgba(cr, ink, 0.16)
-        cr.set_line_width(1.0)
-        cr.rectangle(0.5, 0.5, w - 1, h - 1)
+        cr.paint()
+        light = cairo.RadialGradient(30, 0, 0, 30, 0, 440)
+        light.add_color_stop_rgba(0, *accent, 0.12)
+        light.add_color_stop_rgba(1, *accent, 0)
+        cr.set_source(light)
+        cr.paint()
+        cr.restore()
+        _rounded_rect(cr, 4.5, 4.5, w - 9, h - 9, 22)
+        _rgba(cr, accent, 0.3)
+        cr.set_line_width(1)
         cr.stroke()
-
-        tone = self.app.tone()
-        paint_mark(cr, 25, 25, 8, tone=tone)
-        _set_font(cr, bold=True, size=13, family="display")
-        _rgba(cr, ink)
-        cr.move_to(42, 30)
-        cr.show_text(__app_name__)
-
-        updated = getattr(self.app, "last_updated", None) or _clock_now()[:5]
-        status = "刷新中" if self.app.fetching else f"更新 {updated}"
-        _set_font(cr, size=9)
-        _rgba(cr, ink_soft)
-        sw = cr.text_extents(status).width
-        cr.move_to(w - 48 - sw, 29)
-        cr.show_text(status)
-        _set_font(cr, size=16)
-        close = "×"
-        cw = cr.text_extents(close).width
-        cr.move_to(w - 19 - cw, 30)
-        cr.show_text(close)
-        self._rule(cr, 20, 50, w - 20, rule)
-
-        if snap is None:
-            self._paint_empty(cr, ink, ink_soft, rule, accent)
-            return
-
-        api_sub = f"{fmt_usd(snap.api_used_cents)} / {fmt_usd(snap.api_limit_cents)}"
-        cursor_sub = f"{fmt_usd(snap.auto_used_cents)} / {fmt_usd(snap.auto_limit_cents)}"
-        if snap.gpt_ok:
-            gpt_sub = " · ".join(
-                part for part in (
-                    "缓存值" if snap.gpt_stale else "",
-                    snap.gpt_plan or "Codex",
-                    f"重置 {fmt_when(snap.gpt_reset_at)}" if snap.gpt_reset_at else "",
-                ) if part
-            )
-        else:
-            gpt_sub = snap.gpt_error or "未读取到 Codex 登录态"
-
-        api_color = alert if tone in ("warn", "critical") else accent
-        self._metric_row(cr, 64, "Cursor API", fmt_pct(snap.api_percent), api_sub,
-                         snap.api_percent, api_color, ink, ink_soft, rule)
-        self._metric_row(cr, 157, "Cursor Models", fmt_pct(snap.auto_percent), cursor_sub,
-                         snap.auto_percent, accent, ink, ink_soft, rule)
-        self._metric_row(cr, 250, "Codex 周额度", fmt_pct(snap.gpt_percent), gpt_sub,
-                         snap.gpt_percent, alert if snap.gpt_limit_reached else accent,
-                         ink, ink_soft, rule)
-
-        self._rule(cr, 20, 346, w - 20, rule)
-        _set_font(cr, bold=True, size=11)
-        _rgba(cr, ink)
-        cr.move_to(22, 382)
-        cr.show_text("收起详情" if self.details_expanded else "展开详情")
-        self._chevron(cr, w - 21, 376, up=self.details_expanded, color=ink_soft)
-
-        if self.details_expanded:
-            self._paint_details(cr, snap, ink, ink_soft, rule, accent)
-
-    def _paint_empty(self, cr, ink, ink_soft, rule, accent) -> None:
-        for top in (64, 157, 250):
-            _rgba(cr, rule, 0.75)
-            _rounded_rect(cr, 22, top + 58, BASE_W - 44, 6, 3)
-            cr.fill()
-        _set_font(cr, bold=True, size=20, family="display")
-        _rgba(cr, ink)
-        cr.move_to(22, 101)
-        cr.show_text("正在读取用量")
-        _set_font(cr, size=11)
-        _rgba(cr, ink_soft)
-        cr.move_to(22, 126)
-        cr.show_text("数据只在本机整理")
-        _rgba(cr, accent)
-        _rounded_rect(cr, 22, 148, 74, 3, 1.5)
+        self._text(cr, "AGENT / BUDGET", 26, 33, ink, 12, True, "figure")
+        _rgba(cr, accent if not self.app.fetching else muted)
+        cr.arc(27, 49, 2, 0, math.tau)
         cr.fill()
+        updated = getattr(self.app, "last_updated", None)
+        status = "正在同步" if self.app.fetching else (f"更新于 {updated}" if updated else "等待同步")
+        self._text(cr, status, 36, 53, muted, 9)
+        if getattr(self, "_hover", None) == "close":
+            _rgba(cr, alert, 0.14)
+            _rounded_rect(cr, w - 46, 14, 30, 30, 9)
+            cr.fill()
+        self._text(cr, "×", w - 37, 35, muted, 19)
 
-    def _metric_row(
-        self, cr, top, label, value, sub, pct, color, ink, ink_soft, rule,
-    ) -> None:
-        _set_font(cr, bold=True, size=11)
-        _rgba(cr, ink)
-        cr.move_to(22, top + 18)
-        cr.show_text(label)
-        _set_font(cr, bold=True, size=24, family="figure")
-        value_w = cr.text_extents(value).width
-        cr.move_to(BASE_W - 22 - value_w, top + 28)
-        cr.show_text(value)
-        _set_font(cr, size=10)
-        _rgba(cr, ink_soft)
-        cr.move_to(22, top + 46)
-        cr.show_text(str(sub)[:48])
+        for top, letter, label, pct, reset, error, stale in (
+            (76, "A", "Cursor API", snap.api_percent if snap else None,
+             snap.cycle_end if snap else None, (snap.error if snap and not snap.ok else None), False),
+            (222, "G", "Codex 周额度", snap.gpt_percent if snap and snap.gpt_ok else None,
+             snap.gpt_reset_at if snap else None, (snap.gpt_error if snap and not snap.gpt_ok else None),
+             bool(snap and snap.gpt_stale)),
+        ):
+            color = alert if _usage_tone(pct, self.app.settings.warning_threshold,
+                                        self.app.settings.critical_threshold) != "ok" else accent
+            self._metric_row(cr, top, letter, label, pct, reset, error, stale,
+                             color, ink, muted, rule)
+        self._rule(cr, 26, 207, w - 26, rule)
 
-        bar_x, bar_y, bar_w, bar_h = 22, top + 62, BASE_W - 44, 6
-        _rgba(cr, rule)
-        _rounded_rect(cr, bar_x, bar_y, bar_w, bar_h, bar_h / 2)
+        hover = getattr(self, "_hover", None) == "details"
+        _rounded_rect(cr, 24, 376, w - 48, 38, 10)
+        _rgba(cr, accent, 0.17 if hover else 0.08)
+        cr.fill_preserve()
+        if getattr(self, "drawing", None) is not None and self.drawing.has_focus():
+            _rgba(cr, accent, 0.8)
+            cr.set_line_width(1.2)
+            cr.stroke()
+        else:
+            cr.new_path()
+        self._text(cr, "收起详情" if self.details_expanded else "展开详情", 38, 400, ink, 11, True)
+        self._chevron(cr, w - 41, 395, up=self.details_expanded, color=accent)
+        if self.details_expanded:
+            self._paint_details(cr, snap, ink, muted, rule, accent)
+
+    def _meter(self, cr, x, y, width, pct, color, rule):
+        _rgba(cr, rule, 0.6)
+        _rounded_rect(cr, x, y, width, 5, 2.5)
         cr.fill()
         if pct is not None and math.isfinite(pct) and pct > 0:
-            fill = max(bar_h, min(bar_w, pct / 100.0 * bar_w))
-            _rgba(cr, color)
-            _rounded_rect(cr, bar_x, bar_y, fill, bar_h, bar_h / 2)
+            fill = max(5, min(width, width * pct / 100))
+            gradient = cairo.LinearGradient(x, y, x + width, y)
+            gradient.add_color_stop_rgba(0, *color, 0.5)
+            gradient.add_color_stop_rgba(1, *color, 1)
+            cr.set_source(gradient)
+            _rounded_rect(cr, x, y, fill, 5, 2.5)
+            cr.fill()
+        for tick in range(11):
+            _rgba(cr, rule, 0.7)
+            cr.rectangle(x + tick * width / 10, y + 10, 1, 3 if tick % 5 else 5)
             cr.fill()
 
-    def _paint_details(self, cr, snap, ink, ink_soft, rule, accent) -> None:
-        self._rule(cr, 20, 404, BASE_W - 20, rule)
-        _set_font(cr, bold=True, size=10)
-        _rgba(cr, accent)
-        cr.move_to(22, 431)
-        cr.show_text("本期概览")
+    def _metric_row(self, cr, top, letter, label, pct, reset, error, stale,
+                    color, ink, muted, rule):
+        self._text(cr, letter, 26, top + 19, color, 17, True, "figure")
+        self._text(cr, label, 51, top + 18, muted, 11)
+        self._text(cr, "已用" + (" · 缓存" if stale else ""), BASE_W - (89 if stale else 50),
+                   top + 18, muted, 9)
+        value = fmt_pct(pct)
+        number = value.rstrip("%")
+        self._text(cr, number, 24, top + 77, ink, 58, True, "figure")
+        number_width = cr.text_extents(number).width
+        if value.endswith("%"):
+            self._text(cr, "%", 32 + number_width, top + 76, color, 24, False, "figure")
+        self._meter(cr, 27, top + 88, BASE_W - 54, pct, color, rule)
+        sub = error or ("正在读取用量" if self.app.snap is None else
+                        f"重置 {fmt_when(reset)}" if reset else "重置时间暂不可用")
+        self._text(cr, sub, 27, top + 125, muted, 10, width=BASE_W - 54)
 
-        self._detail_line(cr, 459, "今日 A", _cursor_today(
-            snap.today_api_percent, snap.today_api_cents,
-            snap.today_api_events, snap.today_truncated,
-        ), ink, ink_soft)
-        self._detail_line(cr, 487, "今日 C", _cursor_today(
-            snap.today_auto_percent, snap.today_auto_cents,
-            snap.today_auto_events, snap.today_truncated,
-        ), ink, ink_soft)
-        self._detail_line(cr, 515, "今日 G", _codex_today(snap), ink, ink_soft)
-        self._detail_line(cr, 543, "Cursor 周期", _cycle_text(
-            snap.cycle_start, snap.cycle_end), ink, ink_soft)
-        self._detail_line(cr, 571, "Codex 周期", _cycle_text(
-            snap.gpt_cycle_start, snap.gpt_cycle_end), ink, ink_soft)
-
-    def _detail_line(self, cr, y, label, value, ink, ink_soft) -> None:
-        _set_font(cr, size=10)
-        _rgba(cr, ink_soft)
-        cr.move_to(22, y)
-        cr.show_text(label)
-        _set_font(cr, bold=True, size=10)
-        _rgba(cr, ink)
-        value = str(value)
-        width = cr.text_extents(value).width
-        cr.move_to(BASE_W - 22 - width, y)
-        cr.show_text(value)
+    def _paint_details(self, cr, snap, ink, muted, rule, accent) -> None:
+        snap = snap or Snapshot(ok=False)
+        self._text(cr, "C", 27, 447, accent, 14, True, "figure")
+        self._text(cr, "Cursor Models", 49, 447, muted, 11)
+        pct = fmt_pct(snap.auto_percent)
+        _set_font(cr, size=23, bold=True, family="figure")
+        self._text(cr, pct, BASE_W - 27 - cr.text_extents(pct).width, 477,
+                   ink, 23, True, "figure")
+        self._text(cr, f"{fmt_usd(snap.auto_used_cents)} / {fmt_usd(snap.auto_limit_cents)}",
+                   27, 476, muted, 10, width=BASE_W - 155)
+        self._meter(cr, 27, 490, BASE_W - 54, snap.auto_percent, accent, rule)
+        self._rule(cr, 27, 522, BASE_W - 27, rule)
+        for y, label, start, end, estimated in (
+            (548, "Cursor 订阅周期", snap.cycle_start, snap.cycle_end, False),
+            (612, "Codex 订阅周期", snap.gpt_cycle_start, snap.gpt_cycle_end,
+             snap.gpt_cycle_estimated),
+        ):
+            self._text(cr, label + (" · 预计" if estimated else ""), 27, y, muted, 10)
+            value = _cycle_text(start, end) if start or end else "暂不可用"
+            self._text(cr, value, 27, y + 24, ink, 12, True, width=BASE_W - 54)
 
     def _chevron(self, cr, x, y, *, up: bool, color) -> None:
         _rgba(cr, color)
@@ -599,11 +620,9 @@ class LedgerApp:
     def tone(self) -> str:
         if self.snap is None:
             return "ok"
-        return _usage_tone(
-            self.snap.api_percent,
-            self.settings.warning_threshold,
-            self.settings.critical_threshold,
-        )
+        figures = [p for p in (self.snap.api_percent, self.snap.gpt_percent) if p is not None]
+        return _usage_tone(max(figures) if figures else None,
+                           self.settings.warning_threshold, self.settings.critical_threshold)
 
     def apply_mode(self) -> None:
         mode = self.settings.display_mode
@@ -701,7 +720,7 @@ class LedgerApp:
         dialog.format_secondary_text(
             "本机日账。登录态与用量只留在这台电脑上，不经过第三方服务器。\n"
             "Cursor 走本机编辑器登录；Codex 走本机 ~/.codex 登录。\n"
-            "窗口：左键拖动，点「展开详情」查看今日账目，右键打开菜单。"
+            "窗口：左键拖动，点「展开详情」查看 C 与订阅周期，右键打开菜单。"
         )
         dialog.run()
         dialog.destroy()
@@ -749,7 +768,6 @@ class LedgerApp:
         if snap is None or not snap.ok:
             self.indicator.set_figures(
                 snap.api_percent if snap else None,
-                snap.auto_percent if snap else None,
                 snap.gpt_percent if snap else None,
                 tone="warn",
                 gpt_stale=bool(snap and snap.gpt_stale),
@@ -757,7 +775,6 @@ class LedgerApp:
             return
         self.indicator.set_figures(
             snap.api_percent,
-            snap.auto_percent,
             snap.gpt_percent if snap.gpt_ok else None,
             tone=self.tone(),
             gpt_stale=snap.gpt_stale,

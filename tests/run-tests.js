@@ -148,3 +148,37 @@ assert.strictEqual(publicData.gptTodayPartial, false);
 
 fs.rmSync(stateDir, { recursive: true, force: true });
 console.log('All tests passed.');
+
+// Cycle regressions: epochs, atomic merges, stale fallbacks, and calendar renewal.
+const { parseResetInstant } = require('../lib/dayWindow');
+const { normalizeCycle, subscriptionCycle } = require('../lib/billingCycle');
+const { mergeBillingCycle } = require('../lib/cursorApi');
+const now = new Date('2026-10-08T12:00:00Z');
+assert.strictEqual(parseResetInstant(1790859600).toISOString(), parseResetInstant('1790859600000').toISOString());
+const summary = { billingCycleStart: '2026-10-03T00:00:00Z', billingCycleEnd: '2026-11-03T00:00:00Z' };
+mergeBillingCycle(summary, { billingCycleStart: '2026-09-03T00:00:00Z', billingCycleEnd: '2026-10-03T00:00:00Z' }, now);
+assert.strictEqual(summary.billingCycleStart, '2026-10-03T00:00:00.000Z');
+assert.strictEqual(summary.billingCycleEnd, '2026-11-03T00:00:00.000Z');
+mergeBillingCycle(summary, { billingCycleStart: '2026-10-05T00:00:00Z', billingCycleEnd: '2026-11-05T00:00:00Z' }, now);
+assert.strictEqual(summary.billingCycleStart, '2026-10-05T00:00:00.000Z', 'replace both dates together');
+mergeBillingCycle(summary, { billingCycleEnd: '2026-12-05T00:00:00Z' }, now);
+assert.strictEqual(summary.billingCycleEnd, '2026-11-05T00:00:00.000Z', 'ignore incomplete pairs');
+assert.strictEqual(normalizeCycle('bad', '2026-11-03'), null);
+assert.strictEqual(normalizeCycle('2026-12-03', '2026-11-03'), null);
+let cycle = subscriptionCycle('2026-09-07T01:31:51Z', '2026-10-07T01:31:51Z', { now, activePaid: true });
+assert.deepStrictEqual(cycle, { start: '2026-10-07T01:31:51.000Z', end: '2026-11-07T01:31:51.000Z', estimated: true });
+assert.strictEqual(subscriptionCycle('2026-09-07', '2026-10-07', { now }), null, 'no unconfirmed renewal');
+cycle = subscriptionCycle('2026-10-07', '2026-11-07', { now });
+assert.strictEqual(cycle.estimated, false);
+cycle = subscriptionCycle('2026-01-31T12:00:00Z', '2026-02-28T12:00:00Z', { now: new Date('2026-04-30T12:00:00Z'), activePaid: true });
+assert.strictEqual(cycle.start, '2026-04-30T12:00:00.000Z');
+assert.strictEqual(cycle.end, '2026-05-31T12:00:00.000Z', 'retain the original month-end anchor');
+cycle = subscriptionCycle('2024-02-29T12:00:00Z', '2025-02-28T12:00:00Z', { now: new Date('2028-03-01T12:00:00Z'), activePaid: true });
+assert.strictEqual(cycle.start, '2028-02-29T12:00:00.000Z');
+assert.strictEqual(cycle.end, '2029-02-28T12:00:00.000Z');
+assert.strictEqual(subscriptionCycle('2026-10-01', '2026-10-04', { now, activePaid: true }), null, 'never extrapolate trial dates');
+console.log('Billing cycle regressions passed.');
+const { mergePlanUsage } = require('../lib/cursorApi');
+const currentSummary = { billingCycleStart: '2026-10-03T00:00:00Z', billingCycleEnd: '2026-11-03T00:00:00Z', apiUsedPercent: 5 };
+mergePlanUsage(currentSummary, { billingCycleStart: '2026-09-03T00:00:00Z', billingCycleEnd: '2026-10-03T00:00:00Z', planUsage: { apiPercentUsed: 99 } }, now);
+assert.strictEqual(currentSummary.apiUsedPercent, 5, 'stale cycle usage must not contaminate current figures');

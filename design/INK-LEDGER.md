@@ -1,19 +1,17 @@
-# Quiet Ledger
+# Obsidian / Brass
 
-AgentBudget 2.0 uses a compact, three-signal hierarchy. Cursor API, Cursor Models, and the Codex weekly window are the only figures visible at rest. Each receives the same vertical rhythm: a plain label, a right-aligned tabular percentage, one line of evidence, and a restrained meter. Nothing else competes for first glance.
+AgentBudget 2.1 puts two figures first: A for Cursor API, G for the Codex weekly allowance. Large monospaced numerals and a restrained brass percentage sign make the values readable at a glance. Small captions consistently show reset times. The two windows use independent warning thresholds; red means an allowance needs attention.
 
-Headline percentages are whole numbers. A quota share is a coarse quantity that moves in visible steps, so two decimal places only added noise and invited the eye to read digits that never mattered. Precision is kept where it carries meaning instead: today's spend in a single pool is a fraction of a percent, so those rows stay at two decimals alongside the dollar figure.
+The surface is warm graphite, with a soft brass light at the upper edge, a thin inset frame, and a rounded silhouette. The light variant uses warm porcelain with the same information hierarchy. There are no external font or asset downloads. A system CJK sans-serif keeps small labels legible; a local monospaced face stabilizes changing numbers.
 
-Secondary accounting belongs behind progressive disclosure. Today's spend per pool, the Codex day figure, and the two subscription cycles appear only after the user selects “展开详情”. Five rows, one section: the card works as both a calm ambient instrument and a complete day ledger without forcing both modes into the same view.
+Each meter has a continuous fill and quiet decade ticks. The expanded section contains only Cursor Models' current allowance and the two subscription cycles. Each cycle gets a separate label and date line, leaving room for the explicit “预计” marker on a projected Codex renewal. Daily consumption does not appear anywhere.
 
-A figure the machine cannot know is not dressed up. The Codex service reports only a rolling window, so a day that was sampled late reads `≥2%` rather than a confident number, and a day with nothing observed reads `—`.
+The 380 × 430 main canvas expands to 380 × 660. The details button preserves its position, has a hover treatment and keyboard focus ring, and supports Space / Enter. The close button has its own hover state. Every size setting scales the whole Cairo canvas consistently.
 
-The surface is warm graphite or porcelain rather than pure black or white. One muted brass accent carries normal state; a quiet red is reserved for a genuine warning. There are no decorative gradients, left-edge ribbons, neon telemetry colors, card stacks, or ornamental shadows. Hairlines separate phases, not every datum.
+The GNOME label is ` A 12%  ·  G 56%` (fictional values). Spacing and a stable width guide reduce movement during refreshes. Fonts and text color remain controlled by the desktop shell.
 
-Typography has three jobs. A serif face gives the small product name identity, a CJK sans-serif keeps labels and evidence quiet, and a monospaced figure face makes percentages stable while they update.
+All preview images use deterministic fictional values from the render script. No real account data is used.
 
-The collapsed logical canvas is 348 × 430. The expanded canvas grows vertically in place to 348 × 600, preserving width and the three primary rows. The GNOME panel follows the same hierarchy using `A`, `C`, and `G` as compact labels, with a leading space keeping the figures clear of the app icon.
+![Dark, collapsed](agentbudget-v2.1-preview.png)
 
-![Collapsed dark card](agentbudget-v2.0-preview.png)
-
-![Expanded dark card](agentbudget-v2.0-details.png)
+![Dark, expanded](agentbudget-v2.1-details.png)

@@ -46,9 +46,9 @@ Conflicts: cursorbudget
 Replaces: cursorbudget
 Maintainer: Xukun-Cia <noreply@users.noreply.github.com>
 Description: Local agent quota monitor for Ubuntu
- AgentBudget shows Cursor API, Cursor Models, and Codex weekly quota in
- a compact floating window or GNOME top-bar readout, plus today's spend
- per pool. Login state and usage stay on this machine.
+ AgentBudget shows Cursor API and Codex weekly quota in a floating window
+ or GNOME top-bar readout. Expand for Cursor Models and billing cycles.
+ Login state and usage stay on this machine.
 EOF
 
 cat > "${PKG_DIR}/DEBIAN/postinst" <<'EOF'

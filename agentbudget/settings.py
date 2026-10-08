@@ -13,9 +13,9 @@ LEGACY_CONFIG_PATH = Path.home() / ".config" / "cursorbudget" / "config.json"
 
 # Logical design sizes. The default card stays deliberately compact; secondary
 # accounting details are revealed in place on demand.
-BASE_W = 348
+BASE_W = 380
 BASE_H = 430
-DETAIL_H = 600
+DETAIL_H = 660
 
 DISPLAY_MODES = ("window", "panel")
 DISPLAY_MODE_LABELS = {
@@ -31,8 +31,8 @@ SIZE_PRESETS = {
 }
 
 THEME_PRESETS = {
-    "light": "宣纸",
-    "dark": "砚台",
+    "light": "暖瓷",
+    "dark": "曜石",
 }
 
 # paper, ink, ink_soft, rule, ochre, cinnabar, moss
@@ -62,7 +62,7 @@ THEMES: Dict[str, ThemeColors] = {
 DEFAULT_SIZE = "medium"
 DEFAULT_SCALE = 1.0
 DEFAULT_REFRESH_SEC = 60.0
-DEFAULT_THEME = "light"
+DEFAULT_THEME = "dark"
 DEFAULT_DISPLAY_MODE = "window"
 DEFAULT_WARNING = 80.0
 DEFAULT_CRITICAL = 95.0

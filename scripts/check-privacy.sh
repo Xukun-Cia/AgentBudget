@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 if git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  forbidden="$({ git -C "$ROOT" ls-files || true; } | grep -Ei '(^|/)(auth\.json|probe-results\.json|api-response\.json|.*\.vscdb(-wal|-shm)?|\.env)$' || true)"
+  forbidden="$({ git -C "$ROOT" ls-files || true; } | grep -Ei '(^|/)(auth\.json|probe-results\.json|api-response\.json|.*\.vscdb(-wal|-shm)?|\.env.*)$' || true)"
   if [[ -n "$forbidden" ]]; then
     echo "Privacy check failed: a private dump or credential file is tracked." >&2
     echo "$forbidden" >&2

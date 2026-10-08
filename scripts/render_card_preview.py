@@ -13,7 +13,7 @@ from agentbudget.app import LedgerWindow  # noqa: E402
 from agentbudget.fetch import Snapshot  # noqa: E402
 from agentbudget.settings import BASE_H, BASE_W, DETAIL_H, Settings  # noqa: E402
 
-PREVIEW_STEM = "agentbudget-v2.0"
+PREVIEW_STEM = "agentbudget-v2.1"
 
 
 class PreviewApp:
@@ -41,6 +41,7 @@ class PreviewApp:
             gpt_plan="Pro",
             gpt_percent=4,
             gpt_reset_at="2026-10-10T09:40:38+08:00",
+            gpt_cycle_estimated=True,
             gpt_cycle_start="2026-10-07T09:31:51+08:00",
             gpt_cycle_end="2026-11-07T09:31:51+08:00",
             gpt_today_percent=2,

@@ -22,9 +22,9 @@ assert fmt_pct(0) == "0%"
 assert fmt_pct(None) == "—"
 assert fmt_pct_fine(0.71) == "0.71%"
 
-assert panel_label(34.22, 13.11, 39) == " A 34% · C 13% · G 39%"
-assert panel_label(None, None, None) == " A — · C — · G —"
-assert panel_label(9.46, 7.33, 3, True).endswith("G ~3%")
+assert panel_label(34.22, 39) == " A 34%  ·  G 39%"
+assert panel_label(None, None) == " A —  ·  G —"
+assert panel_label(9.46, 3, True).endswith("G ~3%")
 assert LABEL_GUIDE.startswith(" A ")
 
 settings = Settings()
@@ -49,10 +49,12 @@ snap = snapshot_from_dict({
     "cycleEnd": "2026-10-04T14:06:00+08:00",
     "gptOk": True,
     "gptPercent": 39,
+    "gptCycleEstimated": True,
     "gptCycleStart": "2026-09-07T09:31:51+08:00",
     "gptCycleEnd": "2026-10-07T09:31:51+08:00",
     "gptTodayPercent": 2,
 })
+assert snap.gpt_cycle_estimated is True
 assert snap.today_api_cents == 177.0
 assert snap.today_auto_events == 11
 assert _codex_today(snap) == "2%"
@@ -90,3 +92,43 @@ assert stale.gpt_error == "timeout"
 assert stale.gpt_today_percent == 4.0, "the local ledger survives a failed refresh"
 
 print("Python checks passed.")
+
+# Render through the actual painter and inspect text, so hidden data cannot leak
+# into the collapsed view when labels or layout change.
+import cairo
+from agentbudget.app import LedgerWindow
+from agentbudget.fetch import Snapshot
+from agentbudget.settings import BASE_W
+
+class PaintApp:
+    settings = Settings(theme="dark")
+    fetching = False
+    last_updated = "12:00"
+    snap = Snapshot(ok=True, api_percent=45, auto_percent=23, gpt_ok=True,
+                    gpt_percent=67, cycle_end="2026-11-01T00:00:00Z",
+                    gpt_reset_at="2026-10-09T00:00:00Z", gpt_cycle_estimated=True)
+
+class TextRecorder:
+    def __init__(self, context):
+        self.context = context
+        self.text = []
+    def __getattr__(self, key):
+        return getattr(self.context, key)
+    def show_text(self, text):
+        self.text.append(text)
+        self.context.show_text(text)
+
+for expanded in (False, True):
+    window = LedgerWindow.__new__(LedgerWindow)
+    window.app = PaintApp()
+    window.details_expanded = expanded
+    context = TextRecorder(cairo.Context(cairo.ImageSurface(cairo.FORMAT_ARGB32, BASE_W, DETAIL_H)))
+    window._paint_logical(context)
+    shown = "\n".join(context.text)
+    assert "今日" not in shown
+    assert ("C" in context.text) == expanded
+    assert ("订阅周期" in shown) == expanded
+    if not expanded:
+        assert "$" not in shown
+        assert sum(text.startswith("重置 ") for text in context.text) == 2
+print("UI content checks passed.")

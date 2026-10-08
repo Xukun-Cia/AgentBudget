@@ -42,7 +42,7 @@ function post(path, sessionToken, body) {
         try {
           resolve(JSON.parse(d));
         } catch (e) {
-          reject(Error('HTTP ' + x.statusCode + ' ' + d.slice(0, 200)));
+          reject(Error('HTTP ' + x.statusCode + ': invalid JSON response'));
         }
       });
     });

@@ -105,7 +105,7 @@ async function main() {
       };
       const r = await req(url, h);
       if (r.status === 200 && r.body && typeof r.body === 'object') {
-        out.push(redactPrivate({ url, authIdx: i, status: r.status, body: r.body }, ''));
+        out.push(redactPrivate({ url: url.replace(userId, '<redacted>'), authIdx: i, status: r.status, body: r.body }, ''));
         console.log('OK', url.replace(userId, '<redacted>'), 'auth', i, 'keys', bodyKeys(r.body).join(','));
         break;
       }
@@ -121,6 +121,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(err.message || String(err));
+  console.error('诊断失败，请检查本机登录态或网络。');
   process.exit(1);
 });

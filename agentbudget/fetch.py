@@ -45,6 +45,7 @@ class Snapshot:
     gpt_percent: Optional[float] = None
     gpt_reset_at: Optional[str] = None
     gpt_limit_reached: Optional[bool] = None
+    gpt_cycle_estimated: bool = False
     gpt_cycle_start: Optional[str] = None
     gpt_cycle_end: Optional[str] = None
     gpt_today_percent: Optional[float] = None
@@ -57,12 +58,12 @@ def lib_dir() -> Path:
         candidate = Path(env)
         if (candidate / "status-json.js").is_file():
             return candidate
-    installed = Path("/usr/lib/agentbudget/lib")
-    if (installed / "status-json.js").is_file():
-        return installed
     source = Path(__file__).resolve().parents[1] / "lib"
     if (source / "status-json.js").is_file():
         return source
+    installed = Path("/usr/lib/agentbudget/lib")
+    if (installed / "status-json.js").is_file():
+        return installed
     raise RuntimeError("找不到 status-json.js（请从源码运行或用 deb 安装）")
 
 
@@ -162,6 +163,7 @@ def snapshot_from_dict(data: dict) -> Snapshot:
         gpt_percent=_num(data.get("gptPercent")),
         gpt_reset_at=data.get("gptResetAt") or None,
         gpt_limit_reached=_bool_or_none(data.get("gptLimitReached")),
+        gpt_cycle_estimated=bool(data.get("gptCycleEstimated")),
         gpt_cycle_start=data.get("gptCycleStart") or None,
         gpt_cycle_end=data.get("gptCycleEnd") or None,
         gpt_today_percent=_num(data.get("gptTodayPercent")),
@@ -222,8 +224,7 @@ def fetch_snapshot() -> Snapshot:
 
     raw = (proc.stdout or "").strip()
     if not raw:
-        err = (proc.stderr or "").strip() or f"status-json 无输出（exit {proc.returncode}）"
-        return Snapshot(ok=False, error=err[:160])
+        return Snapshot(ok=False, error=f"用量读取失败（exit {proc.returncode}）")
     try:
         payload = json.loads(raw)
     except json.JSONDecodeError:

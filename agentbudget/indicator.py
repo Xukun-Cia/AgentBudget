@@ -146,19 +146,19 @@ ID_SETTINGS = 5
 ID_SEP2 = 6
 ID_ABOUT = 7
 ID_QUIT = 8
-# Stable width guide for the three core quota signals.
-LABEL_GUIDE = " A 100% · C 100% · G 100%"
+# Stable width guide for the two primary quota signals.
+LABEL_GUIDE = " A 100%  ·  G ~100%"
 
 
-def panel_label(api, cursor, gpt=None, gpt_stale: bool = False) -> str:
-    """Top bar text: Cursor API, Cursor Models, Codex weekly quota.
+def panel_label(api, gpt=None, gpt_stale: bool = False) -> str:
+    """Top bar text: Cursor API and Codex weekly quota.
 
     The leading space keeps the figures off the app icon.
     """
     gpt_txt = fmt_pct(gpt)
     if gpt_stale and gpt_txt != "—":
         gpt_txt = f"~{gpt_txt}"
-    return f" A {fmt_pct(api)} · C {fmt_pct(cursor)} · G {gpt_txt}"
+    return f" A {fmt_pct(api)}  ·  G {gpt_txt}"
 
 
 def _icon_theme_path() -> str:
@@ -210,7 +210,7 @@ class PanelIndicator:
         self._watch_ids: list[int] = []
         self._registered = False
         self._status = "Passive"
-        self._label = panel_label(None, None, None)
+        self._label = panel_label(None, None)
         self._tone = "ok"
         self._revision = 1
         self._icon_theme = _icon_theme_path()
@@ -254,9 +254,9 @@ class PanelIndicator:
         self._emit_props({"Status": GLib.Variant("s", self._status)})
 
     def set_figures(
-        self, api, cursor, gpt=None, tone: str = "ok", gpt_stale: bool = False
+        self, api, gpt=None, tone: str = "ok", gpt_stale: bool = False
     ) -> None:
-        label = panel_label(api, cursor, gpt, gpt_stale)
+        label = panel_label(api, gpt, gpt_stale)
         tone_changed = tone != self._tone
         if label == self._label and not tone_changed:
             return
